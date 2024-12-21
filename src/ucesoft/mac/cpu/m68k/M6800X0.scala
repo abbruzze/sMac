@@ -13,7 +13,7 @@ object M6800X0:
     def exception(cpu:M6800X0,number:Int): Unit = {}
 
   trait BusAccessListener:
-    def busAccess(mode:BusAccessMode,cycles:Int): Unit
+    def busAccess(address:Int,mode:BusAccessMode,cycles:Int): Unit
     
   trait ResetDeviceListener:
     def resetDevice(): Unit

@@ -3,7 +3,7 @@ package ucesoft.mac
 import com.formdev.flatlaf.FlatLightLaf
 import ucesoft.mac.Clock.Clockable
 import ucesoft.mac.audio.AudioDevice
-import ucesoft.mac.cpu.m68k.M68000
+import ucesoft.mac.cpu.m68k.{M68000, M6800X0}
 import ucesoft.mac.debugger.Debugger
 import ucesoft.mac.io.MacVIA
 import ucesoft.mac.keyboard.MacKeyboard
@@ -28,12 +28,12 @@ import javax.swing.*
  * @author Alessandro Abbruzzetti
  *         Created on 21/11/2024 15:58  
  */
-object MAC extends MACComponent with Clockable with VideoSignalListener:
+object MAC extends MACComponent with Clockable with VideoSignalListener with M6800X0.BusAccessListener:
   private inline val SYSTEM_CLOCK_FREQ  = 7_833_600
   private inline val VIA_CLOCK_DIVIDER  = 10
   private inline val VIA_CLOCK_FREQ     = SYSTEM_CLOCK_FREQ / VIA_CLOCK_DIVIDER
 
-  private val masterClock = new Clock("MasterClock",SYSTEM_CLOCK_FREQ)
+  private val masterClock = new Clock("MasterClock",SYSTEM_CLOCK_FREQ,autoClockIncrement = true)
   final val scsi = new NCR5380
   final val rtc = new RTC
   final val scc = new Z8530(sccIRQLow)
@@ -58,9 +58,11 @@ object MAC extends MACComponent with Clockable with VideoSignalListener:
   }
 
   private var via1SecCycleCounter = 0
+  private var via1CycleCounter = 0L
   private var m68kIRQLevel = 0
   private var m68WaitCycles = 0
   private var mouseCycles = 0
+  private var videoBusAcquired = false
 
   private def sccIRQLow(low:Boolean): Unit =
     if low then m68kIRQLevel |= 2 else m68kIRQLevel &= ~2
@@ -89,11 +91,11 @@ object MAC extends MACComponent with Clockable with VideoSignalListener:
 
     setLogger(log)
 
-    masterClock.setClockables(this,viaClockable)
-    masterClock.setClockDivider(0,1)
-    masterClock.setClockDivider(1,VIA_CLOCK_DIVIDER)
+    m68k.setBusAccessListener(this)
+    masterClock.setClockable(this)
 
-    video.setBusAcquiring(acquire => m68k.setBUSAvailable(!acquire))
+    //video.setBusAcquiring(acquire => m68k.setBUSAvailable(!acquire))
+    video.setBusAcquiring(acquire => videoBusAcquired = acquire)
     video.addVideoSignalListener(this)
 
     m68k.setResetDeviceListener(() => {
@@ -108,12 +110,34 @@ object MAC extends MACComponent with Clockable with VideoSignalListener:
         // TODO
       case _ =>
 
-  override def clock(cycles: Long): Unit =
-    // CPU
-    if m68WaitCycles == 0 then
-      m68WaitCycles = m68k.execute() - 1
-    else
-      m68WaitCycles -= 1
+  // =========================== MAIN LOOP ===========================
+  override def busAccess(address:Int,mode: M6800X0.BusAccessMode, cycles: Int): Unit =
+    var cycleCount = cycles
+
+    masterClock.addCycles(cycles)
+
+    while cycleCount > 0 do
+      if address < 0x40_0000 then // access to RAM
+        while videoBusAcquired do
+          masterClock.addCycles(1)
+          loopDevices()
+      loopDevices()
+      cycleCount -= 1
+    end while
+  end busAccess
+
+  private def loopDevices(): Unit =
+    // VIA
+    via1CycleCounter += 1
+    if (via1CycleCounter % 10) == 0 then
+      via.clock(via1CycleCounter)
+      // 1 sec interrupt handling
+      via1SecCycleCounter += 1
+      if via1SecCycleCounter == VIA_CLOCK_FREQ then
+        via1SecCycleCounter = 0
+        via.CA2In(state = true)
+        via.CA2In(state = false)
+        rtc.oneSecondTrigger()
     // VIDEO
     video.cycle()
     // IWM
@@ -124,8 +148,33 @@ object MAC extends MACComponent with Clockable with VideoSignalListener:
       if mouseCycles == 1250 then
         mouseCycles = 0
         mouse.quad()
-        scc.setDCD(0,mouse.X1 != 0)
+        scc.setDCD(0, mouse.X1 != 0)
         scc.setDCD(1, mouse.Y1 != 0)
+  end loopDevices
+
+  override def clock(cycles: Long): Unit =
+    m68k.execute()
+  end clock
+
+//  override def clock(cycles: Long): Unit =
+//    // CPU
+//    if m68WaitCycles == 0 then
+//      m68WaitCycles = m68k.execute() - 1
+//    else
+//      m68WaitCycles -= 1
+//    // VIDEO
+//    video.cycle()
+//    // IWM
+//    iwm.cycle()
+//    // Mouse
+//    if mouse.isReady then
+//      mouseCycles += 1
+//      if mouseCycles == 1250 then
+//        mouseCycles = 0
+//        mouse.quad()
+//        scc.setDCD(0,mouse.X1 != 0)
+//        scc.setDCD(1, mouse.Y1 != 0)
+  // ==================================================================
 
   override def onVBlank(on: Boolean): Unit = via.CA1In(!on)
   override def onHBlank(on: Boolean, vblank: Boolean, videoLine: Int): Unit =
@@ -218,9 +267,9 @@ object MAC extends MACComponent with Clockable with VideoSignalListener:
 //    iwm.insertFloppy(1, new MacDiskImage("""C:\Users\ealeame\OneDrive - Ericsson\Desktop\Lemmings demo.img"""))
 
     // scsi
-    val s1 = new SCSIHardDrive(3,"""C:\Users\ealeame\OneDrive - Ericsson\Desktop\sMac\755_2GB_drive.dsk""")//"""C:\temp\PCE\hd1.img""") //"""C:\Users\ealeame\OneDrive - Ericsson\Desktop\hdd""")
+    val s1 = new SCSIHardDrive(3,"""C:\Users\ealeame\OneDrive - Ericsson\Desktop\sMac\HD20_512-MacPlus.hda""")//"""C:\temp\PCE\hd1.img""") //"""C:\Users\ealeame\OneDrive - Ericsson\Desktop\hdd""")
     val s2 = new SCSIHardDrive(4,"""C:\temp\PCE\hd1.img""") //"""C:\Users\ealeame\Documents\GitHub\snow\target\release\hdd1.img""")
-    val s3 = new SCSIHardDrive(2,"""C:\Users\ealeame\OneDrive - Ericsson\Desktop\sMac\hdd1.img""")
+    val s3 = new SCSIHardDrive(2,"""C:\Users\ealeame\Documents\GitHub\snow\target\release\hdd1.img""")
     scsi.setTarget(s1)
     scsi.setTarget(s2)
     scsi.setTarget(s3)

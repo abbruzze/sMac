@@ -214,7 +214,7 @@ abstract class M68KCore(val mem:Memory) extends MACComponent with M6800X0:
         elapsed
 
     if busAccessListener != null && elapsedCycles > 0 then
-      busAccessListener.busAccess(accessMode,elapsedCycles)
+      busAccessListener.busAccess(address,accessMode,elapsedCycles)
 
     if busTracing && elapsedCycles > 0 then
       val fcode = if !codeAccess then

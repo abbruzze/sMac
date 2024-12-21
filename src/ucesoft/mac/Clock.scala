@@ -11,7 +11,7 @@ object Clock:
   trait Clockable:
     def clock(cycles:Long): Unit
 
-class Clock (val name: String,private var clocksPerSecond: Int) extends MACComponent with Runnable:
+class Clock (val name: String,private var clocksPerSecond: Int,val autoClockIncrement:Boolean = false) extends MACComponent with Runnable:
   override protected val componentName: String = "masterClock"
   import Clock.*
 
@@ -48,33 +48,19 @@ class Clock (val name: String,private var clocksPerSecond: Int) extends MACCompo
 
   private var errorHandler : Throwable => Unit = uninitialized
 
-  private var clockables : Array[Clockable] = uninitialized
-
-  private var counts : Array[Int] = uninitialized
-  private var steps : Array[Int] = uninitialized
-  private var clocks : Array[Int] = uninitialized
-  private var waits : Array[Int] = uninitialized
+  private var clockable : Clockable = uninitialized
 
   setFrequency(clocksPerSecond)
 
   override def reset(): Unit =
     clockCycles = 0
-    java.util.Arrays.fill(counts,0)
-    java.util.Arrays.fill(waits, 0)
-    java.util.Arrays.fill(clocks,0)
     events = null
+    
+  final def addCycles(cycles:Int): Unit =
+    clockCycles += cycles
 
-  final def setWait(clockIndex:Int,wait:Int): Unit =
-    waits(clockIndex) = wait
-
-  final def setClockables(clocks:Clockable*): Unit =
-    clockables = clocks.toArray
-    steps = Array.ofDim[Int](clocks.length)
-    counts = Array.ofDim[Int](clocks.length)
-    this.clocks = Array.ofDim[Int](clocks.length)
-    waits = Array.ofDim[Int](clocks.length)
-  final def setClockDivider(clockIndex:Int,divider:Int): Unit =
-    steps(clockIndex) = divider
+  final def setClockable(clockable:Clockable): Unit =
+    this.clockable = clockable
 
   final def setErrorHandler(eh:Throwable => Unit): Unit =
     this.errorHandler = eh
@@ -159,19 +145,9 @@ class Clock (val name: String,private var clocksPerSecond: Int) extends MACCompo
     log.info("Clock %s shutdown",name)
 
   private inline def doAction(): Unit =
-    clockCycles += 1
-    var c = 0
-    val size = clocks.length
-    while c < size do
-      counts(c) += 1
-      if counts(c) >= steps(c) then
-        counts(c) = 0
-        clocks(c) += 1
-        if waits(c) == 0 then
-          clockables(c).clock(clocks(c))
-        else
-          waits(c) -= 1
-      c += 1
+    if !autoClockIncrement then
+      clockCycles += 1
+    clockable.clock(clockCycles)
 
   private inline def checkEvents(): Unit =
     while events != null && clockCycles >= events.e.when do
@@ -231,18 +207,9 @@ class Clock (val name: String,private var clocksPerSecond: Int) extends MACCompo
   // ===================== State =============================
   override protected def createState(sb: StateBuilder): Unit =
     sb.
-    w("cycles",clockCycles).
-    w("counts",counts).
-    w("steps",steps).
-    w("clocks",clocks).
-    w("waits",waits)
+    w("cycles",clockCycles)
 
   override protected def restoreState(sb: StateBuilder): Unit =
     import sb.*
-    steps(0) = 0
     clockCycles = r[Long]("cycles")
-    r("counts",counts)
-    r("steps",steps)
-    r("clocks",clocks)
-    r("waits",waits)
     setupNextMeasurement()
