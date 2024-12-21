@@ -1,6 +1,6 @@
 package ucesoft.mac.audio
 
-import ucesoft.mac.{MACComponent, MacModel}
+import ucesoft.mac.{MACComponent, MessageBus}
 
 import java.util.concurrent.LinkedBlockingDeque
 import javax.sound.sampled.*
@@ -20,7 +20,7 @@ class AudioDevice(sampleRate:Int) extends MACComponent with Runnable with Audio:
   private var bufferPos = 0
   private var bufferInMillis = 10
   private val thread = new Thread(this,s"AudioDevice")
-  private var muted = false
+  private var muted, lastMuted = false
   private var sourceLine : SourceDataLine = scala.compiletime.uninitialized
   private var volumeLine : FloatControl = scala.compiletime.uninitialized
   private var masterVolume = 0
@@ -31,6 +31,16 @@ class AudioDevice(sampleRate:Int) extends MACComponent with Runnable with Audio:
 
   setBufferMillisNow(bufferInMillis)
   thread.setPriority(Thread.MAX_PRIORITY)
+
+  override def onMessage(msg: MessageBus.Message): Unit =
+    msg match
+      case MessageBus.WarpMode(_,enabled) =>
+        if enabled then
+          lastMuted = muted
+          muted = true
+        else
+          muted = lastMuted
+      case _ =>
 
   override def getProperties: List[MACComponent.Property] =
     import MACComponent.Property

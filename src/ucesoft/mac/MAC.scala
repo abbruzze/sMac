@@ -60,9 +60,9 @@ object MAC extends MACComponent with Clockable with VideoSignalListener with M68
   private var via1SecCycleCounter = 0
   private var via1CycleCounter = 0L
   private var m68kIRQLevel = 0
-  private var m68WaitCycles = 0
   private var mouseCycles = 0
   private var videoBusAcquired = false
+  private var warpMode = false
 
   private def sccIRQLow(low:Boolean): Unit =
     if low then m68kIRQLevel |= 2 else m68kIRQLevel &= ~2
@@ -108,6 +108,8 @@ object MAC extends MACComponent with Clockable with VideoSignalListener with M68
     msg match
       case MessageBus.FloppyEjected(_,diskName,error) =>
         // TODO
+      case MessageBus.WarpMode(_,enabled) =>
+        warpMode = enabled
       case _ =>
 
   // =========================== MAIN LOOP ===========================
@@ -118,7 +120,7 @@ object MAC extends MACComponent with Clockable with VideoSignalListener with M68
 
     while cycleCount > 0 do
       if address < 0x40_0000 then // access to RAM
-        while videoBusAcquired do
+        while !warpMode && videoBusAcquired do
           masterClock.addCycles(1)
           loopDevices()
       loopDevices()
@@ -257,6 +259,7 @@ object MAC extends MACComponent with Clockable with VideoSignalListener with M68
 
     warp.addActionListener(_ => {
       masterClock.setWarpMode(warp.isSelected)
+      MessageBus.send(MessageBus.WarpMode(this,warp.isSelected))
     })
 
     frame.getContentPane.add("South",southPanel)
