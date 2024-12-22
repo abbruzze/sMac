@@ -70,7 +70,10 @@ class Clock (val name: String,private var clocksPerSecond: Int,val autoClockIncr
     freqDiv1000 = clocksPerSecond / 1000.0
     freqInvBy1000 = 1000.0 / clocksPerSecond
 
-  final def setWarpMode(enabled:Boolean): Unit = warpMode = enabled
+  final def setWarpMode(enabled:Boolean): Unit =
+    warpMode = enabled
+    if !enabled then
+      setupNextMeasurement()
 
   final def cycles: Long = clockCycles
 

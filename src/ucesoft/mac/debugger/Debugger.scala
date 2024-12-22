@@ -864,6 +864,7 @@ class Debugger(m68k:M68000,
         try
           val address = Integer.parseInt(s,16)
           m68k.getRegister(RegisterType.PC).set(address,Size.Long)
+          m68k.clearPrefetchQueue()
         catch
           case _:NumberFormatException =>
             JOptionPane.showMessageDialog(frame,"Invalid address","Error",JOptionPane.ERROR_MESSAGE)

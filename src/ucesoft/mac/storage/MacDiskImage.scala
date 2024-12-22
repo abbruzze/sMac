@@ -185,11 +185,14 @@ class MacDiskImage(val fileName:String,private val emptyDisk:Boolean = false) ex
         None
 
   private def saveImage(sectors:List[Array[Byte]]): Unit =
-    val out = new BufferedOutputStream(new FileOutputStream(fileName))
-    for s <- sectors do
-      out.write(s)
+    if new File(fileName).exists() then
+      val out = new BufferedOutputStream(new FileOutputStream(fileName))
+      for s <- sectors do
+        out.write(s)
 
-    out.close()
+      out.close()
+    else
+      println(s"File $fileName does not exist anymore, skipped saving")
 
   private def decodeSectors(dropTags:Boolean): Either[GCR.SectorDecoding,(Boolean,List[Array[Byte]])] =
     val sectors = new ListBuffer[Array[Byte]]

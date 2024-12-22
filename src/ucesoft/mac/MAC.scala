@@ -113,7 +113,7 @@ object MAC extends MACComponent with Clockable with VideoSignalListener with M68
       case _ =>
 
   // =========================== MAIN LOOP ===========================
-  override def busAccess(address:Int,mode: M6800X0.BusAccessMode, cycles: Int): Unit =
+  override final def busAccess(address:Int,mode: M6800X0.BusAccessMode, cycles: Int): Unit =
     var cycleCount = cycles
 
     masterClock.addCycles(cycles)
@@ -154,7 +154,7 @@ object MAC extends MACComponent with Clockable with VideoSignalListener with M68
         scc.setDCD(1, mouse.Y1 != 0)
   end loopDevices
 
-  override def clock(cycles: Long): Unit =
+  override final def clock(cycles: Long): Unit =
     m68k.execute()
   end clock
 
@@ -265,20 +265,20 @@ object MAC extends MACComponent with Clockable with VideoSignalListener with M68
     frame.getContentPane.add("South",southPanel)
 
     // floppy
-//    val system = new MacDiskImage("""G:\My Drive\Emulatori\Macintosh\system 7.1\Install.img""")
+//    val system = new MacDiskImage("""C:\Users\ealeame\OneDrive - Ericsson\Desktop\sMac\800kMac-701-miniF.dsk""")
 //    iwm.insertFloppy(0, system)
 //    iwm.insertFloppy(1, new MacDiskImage("""C:\Users\ealeame\OneDrive - Ericsson\Desktop\Lemmings demo.img"""))
 
     // scsi
-    val s1 = new SCSIHardDrive(3,"""C:\Users\ealeame\OneDrive - Ericsson\Desktop\sMac\HD20_512-MacPlus.hda""")//"""C:\temp\PCE\hd1.img""") //"""C:\Users\ealeame\OneDrive - Ericsson\Desktop\hdd""")
-    val s2 = new SCSIHardDrive(4,"""C:\temp\PCE\hd1.img""") //"""C:\Users\ealeame\Documents\GitHub\snow\target\release\hdd1.img""")
-    val s3 = new SCSIHardDrive(2,"""C:\Users\ealeame\Documents\GitHub\snow\target\release\hdd1.img""")
+    val s1 = new SCSIHardDrive(2,"""C:\Users\ealeame\OneDrive - Ericsson\Desktop\sMac\hd_s7_ok.img""")//"""C:\temp\PCE\hd1.img""") //"""C:\Users\ealeame\OneDrive - Ericsson\Desktop\hdd""")
+    //val s2 = new SCSIHardDrive(4,"""C:\Users\ealeame\Downloads\boot.vhd""") //"""C:\Users\ealeame\Documents\GitHub\snow\target\release\hdd1.img""")
+    val s3 = new SCSIHardDrive(3,"""C:\Users\ealeame\Documents\GitHub\snow\target\release\hdd1.img""")
     scsi.setTarget(s1)
-    scsi.setTarget(s2)
+    //scsi.setTarget(s2)
     scsi.setTarget(s3)
     scsi.setSCSIListener(storagePanel)
     storagePanel.setSCSI(s1)
-    storagePanel.setSCSI(s2)
+    //storagePanel.setSCSI(s2)
     storagePanel.setSCSI(s3)
 
     // DND

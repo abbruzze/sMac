@@ -1,5 +1,6 @@
 package ucesoft.mac.mmu
 
+import ucesoft.mac.MacModel.PLUS
 import ucesoft.mac.cpu.m68k.{M68000, Memory, Size}
 import ucesoft.mac.io.MacVIA
 import ucesoft.mac.scsi.NCR5380
@@ -99,20 +100,20 @@ class MMU(val scc:Z8530,
       //In this address map,RAM is located at $000000 through $3FF FFF and ROM is located at $400 000 through $43 FFFF
       // TODO for Mac SE
       if address >= 0x60_0000 then
-        readFrom(ram,address - 0x60_0000,ramMask,size)
+        readFrom(ram,address,ramMask,size)
       else if (address & 0b0101_1000_0000_0000_0000_0000) == 0b0101_1000_0000_0000_0000_0000 then // 0101 1000 0000 00d0 0rrr 000n => 0x580drn
         //println("Reading SCSI %06X".format(address))
         ncr5380.read(address)
-      else readFrom(rom, address - 0x40_0000, romMask, size)
+      else readFrom(rom, address, romMask, size)
     else if (address & 0b0101_1000_0000_0000_0000_0000) == 0b0101_1000_0000_0000_0000_0000 then // 0101 1000 0000 00d0 0rrr 000n => 0x580drn
       //println("Reading SCSI %06X".format(address))
       ncr5380.read(address)
-    else if address >= 0x44_0000 && macModel.scsi then
+    else if address >= 0x44_0000 && address < 0x50_0000 && macModel == PLUS then
       // Plus with SCSI has no repeated ROM images above 0x440000 as
       // indication of SCSI controller present.
       0xFF
     else
-      readFrom(rom, address - 0x40_0000, romMask, size)
+      readFrom(rom, address, romMask, size)
   private def writeB1(address:Int,value:Int,size:Size,writeOptions:Int): Unit =
     if overlay then
       if address >= 0x60_000 then
@@ -120,7 +121,7 @@ class MMU(val scc:Z8530,
       else if (address & 0b0101_1000_0000_0000_0000_0000) == 0b0101_1000_0000_0000_0000_0000 then // 0101 1000 0000 00d0 0rrr 000n => 0x580drn
         //println("Writing SCSI %06X".format(address))
         ncr5380.write(address,value)
-      else readFrom(rom, address - 0x40_0000, romMask, size)
+      else readFrom(rom, address, romMask, size)
     else if (address & 0b0101_1000_0000_0000_0000_0000) == 0b0101_1000_0000_0000_0000_0000 then // 0101 1000 0000 00d0 0rrr 000n => 0x580drn
       //println("Writing SCSI %06X".format(address))
       ncr5380.write(address,value)

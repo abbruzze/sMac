@@ -23,7 +23,7 @@ class SCSIHardDrive(override val id:Int,val file:String) extends DirectAccessSCS
     if !storageFile.exists() then
       throw new FileNotFoundException(file)
     if (storageFile.length() % BLOCK_SIZE) != 0 then
-      throw new IOException(s"File $file's length is not a multiple of block size $BLOCK_SIZE'")
+      println(s"File $file's length is not a multiple of block size $BLOCK_SIZE'")
 
     val channel = Files.newByteChannel(storageFile.toPath,StandardOpenOption.READ,StandardOpenOption.WRITE).asInstanceOf[FileChannel]
     channel.map(FileChannel.MapMode.READ_WRITE,0,channel.size())
