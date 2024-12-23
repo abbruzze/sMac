@@ -52,7 +52,7 @@ class RTC extends MACComponent:
           pramDir.mkdirs()
         val pramFile = new File(pramDir,s"pram$macModel.bin")
         if pramFile.exists() then
-          pram = java.nio.file.Files.readAllBytes(pramFile.toPath).map(_ & 0xFF)
+          pram = java.nio.file.Files.readAllBytes(pramFile.toPath).map(_.toInt & 0xFF)
           loadedFromFile = pramFile.getAbsolutePath
           log.info("RTC PRAM loaded from %s",pramFile)
         else
@@ -234,7 +234,8 @@ class RTC extends MACComponent:
       dataOut = pram(address)
     else
       log.info("RTC writing extended address %02X with %02X",address,value)
-      pram(address) = value
+      if !wp then
+        pram(address) = value
 
   private def write(cmd:Int,value:Int): Unit =
     log.info(s"RTC writing into %2X %2X wp=%s",cmd,value,wp)
@@ -252,9 +253,9 @@ class RTC extends MACComponent:
         wp = (value & 0x80) == 0x80
         log.info("RTC write protect set to %s",wp)
       case x@(8|9|10|11) =>
-        if !wp then pram(x & 3 | 0b10000) = value & 0xFF
+        if !wp then pram(x) = value & 0xFF
       case x if x >= 16 && x < 32 =>
-          if !wp then pram(x & 0xF) = value & 0xFF
+          if !wp then pram(x) = value & 0xFF
       case _ =>
           log.warning("RTC: writing to undefined write register: %d", cmd)
 
@@ -265,9 +266,9 @@ class RTC extends MACComponent:
       case 2|6 => ((seconds >> 16) & 0xFF).toInt
       case 3|7 => ((seconds >> 24) & 0xFF).toInt
       case x@(8|9|10|11) =>
-        pram(x & 3 | 0b10000)
+        pram(x)
       case x if x >= 16 && x < 32 =>
-        pram(x & 0xF)
+        pram(x)
       case _ =>
         log.warning("RTC: reading from undefined read register: %d",cmd)
         0xFF
