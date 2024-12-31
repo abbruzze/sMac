@@ -59,6 +59,7 @@ class IWM extends MACComponent:
   private var lstrb = false
   private var enable = false
   private var externalDrive = false
+  private var internalDriveSE = false
   private var headsel = false
   private var mode = 0
   // number of cucles to eject a disk
@@ -127,6 +128,7 @@ class IWM extends MACComponent:
     iwmRegisterSelection = 0
     lstrb = false
     externalDrive = false
+    internalDriveSE = false
     headsel = false
     mode = 0
     ejecting = 0
@@ -147,9 +149,9 @@ class IWM extends MACComponent:
     EJECT_LSTRB_ACTIVE_CYCLES = clockSpeed / 1000 * 550 // < 750 ms (max time for lstrb)
 
     doubleSide = model.floppySettings.doubleDensity
-    drives = Array.ofDim[MacDrive](2) // TODO
-    for i <- 0 until 2 do
-      drives(i) = new MacDrive(driveIndex = i,clockSpeed, doubleSide = doubleSide, present = i < model.floppySettings.drivesNumber,trackChangeListener = diskListener)
+    drives = Array.ofDim[MacDrive](model.floppySettings.drivesNumber)
+    for i <- drives.indices do
+      drives(i) = new MacDrive(driveIndex = i,clockSpeed, doubleSide = doubleSide, present = true,trackChangeListener = diskListener)
 
     log.info("IWM set model to %s: configuring %d %s drives",model.toString,model.floppySettings.drivesNumber,if doubleSide then "double side" else "single side")
 
@@ -177,6 +179,9 @@ class IWM extends MACComponent:
   def addDiskControllerListener(l:DiskControllerListener): Unit = eventListeners ::= l
   def removeDiskControllerListener(l:DiskControllerListener): Unit = eventListeners = eventListeners.filterNot(_ == l)
 
+  def setInternalDriveSE(set:Boolean): Unit =
+    internalDriveSE = set
+
   def setHeadSelLine(set:Boolean): Unit =
     headsel = set
     diskListener.onHeadSelected(getSelectedDrive.driveIndex,if set then 1 else 0)
@@ -189,7 +194,12 @@ class IWM extends MACComponent:
     if !doubleSide || getSelectedDrive.getFloppySides == 1 || !headsel then 0 else 1
 
   inline private def getSelectedDrive: MacDrive =
-    if externalDrive then drives(1) else drives(0)
+    if externalDrive then
+      drives(1)
+    else if internalDriveSE then
+      drives(2)
+    else
+      drives(0)
 
   /*
     A23 A22 A21 A20 ...

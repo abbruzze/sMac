@@ -65,7 +65,6 @@ class MacVideo extends MACComponent:
     this.ram = ram
   def selectVideoBuffer(alternate:Boolean): Unit =
     if alternate then
-      println("ALternate VIDEO")
       videoBufferOffset = macModel.videoSettings.alternateVideoBufferAddress
     else
       videoBufferOffset = macModel.videoSettings.videoBufferAddress

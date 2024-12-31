@@ -93,20 +93,23 @@ class MMU(val scc:Z8530,
   // BLOCK 1: RAM or ROM ====================================================================
   private def readB1(address: Int, size: Size, readOptions: Int): Int =
     if overlay then
-      // Mac SE
-      //One of the first instructions n the Reset handler is a jump to a location in the range
-      //normally assigned to ROM($400 000 through $43E 800).
-      //The first time the BBU receives an address in this range,it switches to the normal address map.
-      //In this address map,RAM is located at $000000 through $3FF FFF and ROM is located at $400 000 through $43 FFFF
-      // TODO for Mac SE
       if address >= 0x60_0000 then
         readFrom(ram,address,ramMask,size)
       else if (address & 0b0101_1000_0000_0000_0000_0000) == 0b0101_1000_0000_0000_0000_0000 then // 0101 1000 0000 00d0 0rrr 000n => 0x580drn
         //println("Reading SCSI %06X".format(address))
         ncr5380.read(address)
-      else readFrom(rom, address, romMask, size)
+      else
+        // Mac SE
+        // One of the first instructions n the Reset handler is a jump to a location in the range
+        // normally assigned to ROM($400 000 through $43E 800).
+        // The first time the BBU receives an address in this range,it switches to the normal address map.
+        // In this address map,RAM is located at $000000 through $3FF FFF and ROM is located at $400 000 through $43 FFFF
+        if macModel == MacModel.SE then
+          overlay = false
+          readB1(address,size,readOptions)
+        else
+          readFrom(rom, address, romMask, size)
     else if (address & 0b0101_1000_0000_0000_0000_0000) == 0b0101_1000_0000_0000_0000_0000 then // 0101 1000 0000 00d0 0rrr 000n => 0x580drn
-      //println("Reading SCSI %06X".format(address))
       ncr5380.read(address)
     else if address >= 0x44_0000 && address < 0x50_0000 && macModel == PLUS then
       // Plus with SCSI has no repeated ROM images above 0x440000 as
@@ -119,9 +122,16 @@ class MMU(val scc:Z8530,
       if address >= 0x60_000 then
         writeTo(ram,address - 0x60_0000,value,ramMask,size)
       else if (address & 0b0101_1000_0000_0000_0000_0000) == 0b0101_1000_0000_0000_0000_0000 then // 0101 1000 0000 00d0 0rrr 000n => 0x580drn
-        //println("Writing SCSI %06X".format(address))
         ncr5380.write(address,value)
-      else readFrom(rom, address, romMask, size)
+      else
+        // Mac SE
+        // One of the first instructions n the Reset handler is a jump to a location in the range
+        // normally assigned to ROM($400 000 through $43E 800).
+        // The first time the BBU receives an address in this range,it switches to the normal address map.
+        // In this address map,RAM is located at $000000 through $3FF FFF and ROM is located at $400 000 through $43 FFFF
+        if macModel == MacModel.SE then
+          overlay = false
+          writeB1(address,value,size,writeOptions)
     else if (address & 0b0101_1000_0000_0000_0000_0000) == 0b0101_1000_0000_0000_0000_0000 then // 0101 1000 0000 00d0 0rrr 000n => 0x580drn
       //println("Writing SCSI %06X".format(address))
       ncr5380.write(address,value)

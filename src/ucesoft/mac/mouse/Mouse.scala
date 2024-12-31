@@ -1,6 +1,7 @@
 package ucesoft.mac.mouse
 
-import ucesoft.mac.MACComponent
+import ucesoft.mac.{MACComponent, MacModel}
+import ucesoft.mac.adb.ADBMouse
 
 import java.awt.{Point, Robot, Toolkit}
 import java.awt.event.{MouseEvent, MouseListener, MouseMotionListener, WindowAdapter, WindowEvent}
@@ -23,6 +24,7 @@ class QuadMouse(zoomFactor:Int) extends Mouse with MouseListener with MouseMotio
   private inline val X = 0
   private inline val Y = 1
 
+  private val adbMouse = new ADBMouse
   private var pressed = false
   private val primaries,secondaries,axes = Array(0,0)
   private var lastX, lastY = -1
@@ -47,6 +49,8 @@ class QuadMouse(zoomFactor:Int) extends Mouse with MouseListener with MouseMotio
   def X2: Int = secondaries(X)
   def Y2: Int = secondaries(Y)
 
+  def getADBMouse: ADBMouse = adbMouse
+
   override protected def reset(): Unit = 
     super.reset()
     lastX = -1
@@ -67,8 +71,11 @@ class QuadMouse(zoomFactor:Int) extends Mouse with MouseListener with MouseMotio
       SwingUtilities.getWindowAncestor(comp).removeWindowListener(windowAdapter)
 
   inline private def move(x:Int,y:Int): Unit =
-    axes(X) += x
-    axes(Y) += y
+    if macModel.ordinal < MacModel.SE.ordinal then
+      axes(X) += x
+      axes(Y) += y
+    else
+      adbMouse.moveDelta(x,y)
 
   def quad(): Unit =
     var axis = X
@@ -88,8 +95,12 @@ class QuadMouse(zoomFactor:Int) extends Mouse with MouseListener with MouseMotio
 
   override def isButtonPressed: Boolean = pressed
 
-  override def mousePressed(e: MouseEvent): Unit = pressed = true
-  override def mouseReleased(e: MouseEvent): Unit = pressed = false
+  override def mousePressed(e: MouseEvent): Unit =
+    pressed = true
+    adbMouse.setButtonPressed(true)
+  override def mouseReleased(e: MouseEvent): Unit =
+    pressed = false
+    adbMouse.setButtonPressed(false)
 
   override def mouseEntered(e: MouseEvent): Unit =
     lastX = e.getX

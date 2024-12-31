@@ -1,6 +1,7 @@
 package ucesoft.mac.keyboard
 
-import ucesoft.mac.MACComponent
+import ucesoft.mac.{MACComponent, MacModel}
+import ucesoft.mac.adb.ADBKeyboard
 
 import java.awt.event.{KeyEvent, KeyListener}
 import scala.collection.mutable
@@ -184,6 +185,9 @@ class MacKeyboard extends MACComponent with KeyListener:
   private var keyboardModel = KeyboardModel.M0110
   private var keyMap : Map[Int,Int] = buildMap()
   private var capsLockOn = false
+  private val adbKeyboard = new ADBKeyboard
+  
+  def getADBKeyboard: ADBKeyboard = adbKeyboard
 
   override def getProperties: List[MACComponent.Property] =
     import MACComponent.Property
@@ -211,7 +215,9 @@ class MacKeyboard extends MACComponent with KeyListener:
       queueLock.unlock()
 
   override def keyPressed(e: KeyEvent): Unit =
-    if e.getExtendedKeyCode == VK_CAPS_LOCK then
+    if macModel.ordinal >= MacModel.SE.ordinal then
+      adbKeyboard.keyEvent(e.getExtendedKeyCode,pressed = true)
+    else if e.getExtendedKeyCode == VK_CAPS_LOCK then
       capsLockOn ^= true
     else
       keyMap.get(e.getExtendedKeyCode) match
@@ -232,7 +238,10 @@ class MacKeyboard extends MACComponent with KeyListener:
             queueLock.unlock()
         case None =>
   override def keyReleased(e: KeyEvent): Unit =
-    keyMap.get(e.getExtendedKeyCode) match
+    if macModel.ordinal >= MacModel.SE.ordinal then
+      adbKeyboard.keyEvent(e.getExtendedKeyCode,pressed = false)
+    else
+      keyMap.get(e.getExtendedKeyCode) match
       case Some(_code) =>
         queueLock.lock()
         try

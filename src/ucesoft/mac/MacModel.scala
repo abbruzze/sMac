@@ -37,7 +37,7 @@ enum MacModel(val clockRateMhz:Int,
     audioSettings = AudioSettings(alternateAudioBufferOffset = 0x60_000),
     pramExtended = false,
     scsi = false,
-    floppySettings = FloppySettings(drivesNumber = 1, doubleDensity = false)
+    floppySettings = FloppySettings(drivesNumber = 1, doubleDensity = false, fdhd = false)
   )
   case PLUS extends MacModel(
     clockRateMhz = 7_833_600,
@@ -58,11 +58,31 @@ enum MacModel(val clockRateMhz:Int,
     audioSettings = AudioSettings(alternateAudioBufferOffset = -0x5C00),
     pramExtended = true,
     scsi = true,
-    floppySettings = FloppySettings(drivesNumber = 2, doubleDensity = true)
+    floppySettings = FloppySettings(drivesNumber = 2, doubleDensity = true, fdhd = false)
+  )
+  case SE extends MacModel(
+    clockRateMhz = 7_833_600,
+    ramSizesInK = Array(1024, 2 * 1024, 4 * 1024),
+    md5 = Array(
+      "9FB38BDCC0D53D9D380897EE53DC1322", // Mac SE, rom size 256K
+    ),
+    skipMemoryTestAddress = Some((0x000CFC, 0x574C5343, Size.Long)),
+    videoSettings = VideoSettings(
+      horizontalPixels = 512,
+      hblankInPixels = 192,
+      verticalLines = 342,
+      vblankLines = 28,
+      alternateVideoBufferOffset = -0x8000
+    ),
+    audioSettings = AudioSettings(alternateAudioBufferOffset = -0x5C00),
+    pramExtended = true,
+    scsi = true,
+    floppySettings = FloppySettings(drivesNumber = 3, doubleDensity = true, fdhd = false)
   )
 
 case class FloppySettings(drivesNumber:Int,
-                          doubleDensity:Boolean)
+                          doubleDensity:Boolean,
+                          fdhd:Boolean)
 case class AudioSettings(alternateAudioBufferOffset:Int):
   final val audioBufferAddress = 0x3FFD00
   final val alternateAudioBufferAddress = audioBufferAddress + alternateAudioBufferOffset

@@ -1,6 +1,6 @@
 package ucesoft.mac.scsi
 
-import ucesoft.mac.{MACComponent, MessageBus}
+import ucesoft.mac.{MACComponent, MacModel, MessageBus}
 
 import javax.swing.ImageIcon
 import scala.collection.mutable.ListBuffer
@@ -249,7 +249,7 @@ class NCR5380 extends MACComponent:
       return 0
 
     reg match
-      case 0b000 => // Current SCSI Data
+      case 0b000 | 0b110 => // Current SCSI Data
         //if phase == Status then println(s"SCSI reading STATUS $scsiData") else println(s"SCSI reading data $scsiData")
         if phase == DataIn && dmaMode then
           if nextDataIn(assertReq = false) then dmaReq = true
@@ -308,9 +308,12 @@ class NCR5380 extends MACComponent:
         if dmaReq then st |= 0x40
         if irq then st |= 0x10
         if (scsiLines & 7) == targetCommandReg then st |= 0x8 // Phase match
+        if isScsiSet(ATN.bit) then st |= 0x02
+        if isScsiSet(ACK.bit) then st |= 0x01
+
         st
-      case 0b110 => // Input Data
-        latchedInputReg
+//      case 0b110 => // Input Data
+//        latchedInputReg
       case 0b111 => // Reset Parity Interrupts
         checkIRQ(newIrq = false)
         0
@@ -419,8 +422,6 @@ class NCR5380 extends MACComponent:
 
   private def checkReset(): Unit =
     if isScsiSet(RST.bit) then
-      println("SCSI RESETTING")
-      // TODO
       setPhase(BusFree)
       checkIRQ(newIrq = false)
       dmaReq = false
@@ -569,7 +570,7 @@ class NCR5380 extends MACComponent:
         if scsiListener != null then
           scsiListener.noTargetSelected()
       case _ =>
-        println(s"SCSI phase not managed: $phase")
+        //println(s"SCSI phase not managed: $phase")
         log.error("SCSI phase not managed: %s",phase)
   end setPhase
 
@@ -635,6 +636,6 @@ class NCR5380 extends MACComponent:
 
   private def checkIRQ(newIrq:Boolean): Unit =
     if newIrq ^ irq then
-      if irqHandler != null then
+      if irqHandler != null && macModel.ordinal >= MacModel.SE.ordinal then
         irqHandler(newIrq)
       irq = newIrq
