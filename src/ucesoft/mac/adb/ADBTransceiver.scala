@@ -63,6 +63,9 @@ class ADBTransceiver extends MACComponent:
 
     state match
       case STATE_IDLE =>
+        if cmd.nonEmpty then
+          processCommand(true)
+          cmd.clear()
         None
       case STATE_COMMAND =>
         if cmd.nonEmpty then
@@ -92,10 +95,10 @@ class ADBTransceiver extends MACComponent:
     command = (cmd(0) >> 2) & 3
     reg = cmd(0) & 3
 
-    println(s"Processing command ${COMMANDS(command)} for device $address/$reg")
+    //println(s"Processing command ${COMMANDS(command)} for device $address/$reg")
 
     if command == 0 then
-      println("RESET")
+      //println("RESET")
       devices.foreach(_.commandReset())
       return true
 
@@ -105,11 +108,11 @@ class ADBTransceiver extends MACComponent:
         activeDevice = device
         command match
           case CMD_FLUSH =>
-            println("FLUSH")
+            //println("FLUSH")
             device.commandFlush()
           case CMD_LISTEN =>
             if completeListen then
-              println(s"LISTEN $address/$reg")
+              //println(s"LISTEN $address/$reg")
               activeDevice.commandListen(reg, this.cmd.tail.toList)
               return true
             return false

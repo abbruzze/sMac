@@ -46,11 +46,10 @@ class ADBMouse extends ADBDevice(address = 3,handlerID = 1,name = "ADB Mouse"):
       if !serviceRequest then return Array()
       serviceRequest = false
       
-      println(s"ADB Mouse: pressed=${buttonPressed} y=${getAdjustedCounter(yCounter)} x=${getAdjustedCounter(xCounter)}")
+      //println(s"ADB Mouse: pressed=${buttonPressed} y=${getAdjustedCounter(yCounter)} x=${getAdjustedCounter(xCounter)}")
       val out = Array(
         (if !buttonPressed then 0x80 else 0) | getAdjustedCounter(yCounter),
         0x80 | getAdjustedCounter(xCounter)
-//        60,63
       )
       xCounter = 0
       yCounter = 0

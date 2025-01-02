@@ -224,7 +224,7 @@ object MAC extends MACComponent with Clockable with VideoSignalListener with M68
     video.setRAM(mmu.getRAM)
     video.setDisplay(display)
 
-    keyboard.setModel(MacKeyboard.KeyboardModel.M0110A)
+    //keyboard.setModel(MacKeyboard.KeyboardModel.M0110A)
 
     debugger.setROM(mmu.getROM)
 
@@ -256,7 +256,7 @@ object MAC extends MACComponent with Clockable with VideoSignalListener with M68
 //    iwm.insertFloppy(1, new MacDiskImage("""C:\Users\ealeame\OneDrive - Ericsson\Desktop\Lemmings demo.img"""))
 
     // scsi
-    val s1 = new SCSIHardDrive(2,"""C:\Users\ealeame\OneDrive - Ericsson\Desktop\sMac\hd_s7_ok.img""")//"""C:\temp\PCE\hd1.img""") //"""C:\Users\ealeame\OneDrive - Ericsson\Desktop\hdd""")
+    val s1 = new SCSIHardDrive(2,"""C:\Users\ealeame\OneDrive - Ericsson\Desktop\sMac\HD20_512-MacPlus.hda""")//"""C:\temp\PCE\hd1.img""") //"""C:\Users\ealeame\OneDrive - Ericsson\Desktop\hdd""")
     //val s2 = new SCSIHardDrive(4,"""C:\Users\ealeame\Downloads\boot.vhd""") //"""C:\Users\ealeame\Documents\GitHub\snow\target\release\hdd1.img""")
     val s3 = new SCSIHardDrive(3,"""C:\Users\ealeame\OneDrive - Ericsson\Desktop\sMac\755_2GB_drive.dsk""")
     scsi.setTarget(s1)

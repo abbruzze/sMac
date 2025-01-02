@@ -78,15 +78,14 @@ class MacVIA(override val irqAction:Boolean => Unit,
   override protected val icon = new ImageIcon(getClass.getResource("/resources/trace/via.png"))
   private inline val KEYBOARD_CMD_OUT_TIME = (180 + 220) * 8 // us
   private inline val KEYBOARD_RESPONSE_TIME = (160 + 170) * 8 // us
-  private inline val ADB_RESPONSE_TIME = 800 * 2 // us
   private var KEYBOARD_CMD_EXE_WAIT_CYCLES = 0 // see setModel
-  private var ADB_RESPONSE_TIME_CYCLES = 0 // see setModel
-  private inline val ADB_RESPONSE_CYCLES = 2350
+  private inline val ADB_RESPONSE_CYCLES = 2350 // about 3ms (raw estimation that seems to work)
 
   private var hblank = 0
   private var keyboardCommandWaitCycles = 0
   private var scsiIRQEnabled = false
   private var adbAckCycles = 0
+  private var adbWroteSR = false
 
   setModel(MAC128K)
 
@@ -104,7 +103,6 @@ class MacVIA(override val irqAction:Boolean => Unit,
   override protected def setModel(model: MacModel): Unit =
     super.setModel(model)
     KEYBOARD_CMD_EXE_WAIT_CYCLES = (model.clockRateMhz / 1_000_000.0 * (KEYBOARD_CMD_OUT_TIME + KEYBOARD_RESPONSE_TIME)).toInt
-    ADB_RESPONSE_TIME_CYCLES = (model.clockRateMhz / 1_000_000.0 * ADB_RESPONSE_TIME).toInt
 
   override def read(address: Int): Int =
     log.info("VIA reading register %d",address & 0xF)
@@ -217,6 +215,7 @@ class MacVIA(override val irqAction:Boolean => Unit,
             adb.setState(cmd) match
               case None =>
               case Some(data) =>
+                // a byte was returned by transceiver: send an INT to emulate the VIA's acquisition time
                 regs(SR) = data
                 irq_set(IRQ_SR)
         /*PB6  */
@@ -239,7 +238,7 @@ class MacVIA(override val irqAction:Boolean => Unit,
               log.warning("VIA keyboardCommandWaitCycles is not 0: %d",keyboardCommandWaitCycles)
             keyboardCommandWaitCycles = waitCycles
           else
-            //adb.sendByte(value)
+            // a byte has been written to SR to be clocked out to ADB: will send an INT to emulate the transceiver's acquisition time
             adbAckCycles = ADB_RESPONSE_CYCLES
       case _ =>
         super.write(address,value)
@@ -251,6 +250,7 @@ class MacVIA(override val irqAction:Boolean => Unit,
     if adbAckCycles > 0 then
       adbAckCycles -= 1
       if adbAckCycles == 0 then
+        // a VIA transfer was finished, sending byte to transceiver
         adb.clockInByte(regs(SR))
         irq_set(IRQ_SR)
 
