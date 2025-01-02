@@ -41,8 +41,11 @@ class MacVideo extends MACComponent:
   private var videoLine = -1
   private var linePixels = 0
 
+  private var readCycle = 0
+  private var readLong = false
   private var readCycles = 0
-  private var pixelShiftRegister = 0 // 16 pixel shift register (1 word)
+  private var shiftMask = 0L
+  private var pixelShiftRegister = 0L // 16/32 pixel shift register (1 word/long)
 
   override def getProperties: List[MACComponent.Property] =
     import MACComponent.Property
@@ -61,6 +64,14 @@ class MacVideo extends MACComponent:
   override protected def setModel(model:MacModel): Unit =
     super.setModel(model)
     videoBufferOffset = macModel.videoSettings.videoBufferAddress
+    if model.ordinal < MacModel.SE.ordinal then
+      readCycle = 4
+      readLong = false
+      shiftMask = 0x10000
+    else
+      readCycle = 8
+      readLong = true
+      shiftMask = 0x10000_0000L
   def setRAM(ram:Array[Int]): Unit =
     this.ram = ram
   def selectVideoBuffer(alternate:Boolean): Unit =
@@ -89,17 +100,21 @@ class MacVideo extends MACComponent:
 
   inline private def shiftPixel(): 0|1 =
     pixelShiftRegister <<= 1
-    if (pixelShiftRegister & 0x10000) != 0 then 1 else 0
+    if (pixelShiftRegister & shiftMask) != 0 then 1 else 0
 
   inline private def draw2Pixels(): Unit =
     val pixelPos = videoLine * macModel.videoSettings.horizontalPixels + linePixels
     videoPixels(pixelPos) = PALETTE(shiftPixel())
     videoPixels(pixelPos + 1) = PALETTE(shiftPixel())
 
-  private def readWord(): Unit =
+  private def readData(): Unit =
     val ramOffset = (videoBufferOffset + videoBufferByteCounter) & (ram.length - 1)
-    pixelShiftRegister = ram(ramOffset) << 8 | ram(ramOffset + 1)
-    videoBufferByteCounter += 2
+    if readLong then
+      pixelShiftRegister = ram(ramOffset) << 24 | ram(ramOffset + 1) << 16 | ram(ramOffset + 2) << 8 | ram(ramOffset + 3)
+      videoBufferByteCounter += 4
+    else
+      pixelShiftRegister = ram(ramOffset) << 8 | ram(ramOffset + 1)
+      videoBufferByteCounter += 2
 
   inline private def acquireBUS(acquire:Boolean): Unit =
     if busAcquiring != null then busAcquiring.acquire(acquire)
@@ -120,7 +135,7 @@ class MacVideo extends MACComponent:
       display.showFrame()
       notifyVBlank(on = true)
     else if rasterLine == macModel.videoSettings.vblankLines then
-      readWord() // read the first word of the frame
+      readData() // read the first word of the frame
       videoLine = 0
       vblank = false
       notifyVBlank(on = false)
@@ -129,9 +144,9 @@ class MacVideo extends MACComponent:
     if !vblank && !hblank then // active area
       draw2Pixels()
       readCycles += 1
-      if readCycles == 4 then acquireBUS(acquire = true)
-      else if readCycles == 8 then
-        readWord()
+      if readCycles == readCycle then acquireBUS(acquire = true)
+      else if readCycles == (readCycle << 1) then
+        readData()
         acquireBUS(acquire = false)
         readCycles = 0
 
