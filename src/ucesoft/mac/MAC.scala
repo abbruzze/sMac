@@ -181,7 +181,7 @@ object MAC extends MACComponent with Clockable with VideoSignalListener with M68
   def main(args:Array[String]): Unit =
     var model : MacModel = null
 
-    ROM.loadROM("""G:\My Drive\Emulatori\Macintosh\1987-03 - B2E362A8 - Mac SE.ROM""") match
+    ROM.loadROM("""G:\My Drive\Emulatori\Macintosh\1986-03 - 4D1F8172 - MacPlus v3.ROM""") match
       case Right(ROM(file,rom,hash,_model)) =>
         log.info("ROM '%s' loaded [%s]: model %s",file,hash,_model)
         mmu.setROM(rom)
@@ -251,7 +251,7 @@ object MAC extends MACComponent with Clockable with VideoSignalListener with M68
     frame.getContentPane.add("South",southPanel)
 
     // floppy
-//    val system = new MacDiskImage("""C:\Users\ealeame\OneDrive - Ericsson\Desktop\sMac\800kMac-701-miniF.dsk""")
+//    val system = new MacDiskImage("""G:\My Drive\Emulatori\Macintosh\System Tools Plus 3.img""")
 //    iwm.insertFloppy(0, system)
 //    iwm.insertFloppy(1, new MacDiskImage("""C:\Users\ealeame\OneDrive - Ericsson\Desktop\Lemmings demo.img"""))
 

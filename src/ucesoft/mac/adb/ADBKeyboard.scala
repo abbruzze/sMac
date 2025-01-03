@@ -59,6 +59,7 @@ class ADBKeyboard extends ADBDevice(address = 2,handlerID = 2,name = "ADB Keyboa
     if !eventQueue.contains(code) then
       serviceRequest = true
       eventQueue += code
+      if code == 0x7F then eventQueue += code // Power button
 
   override def commandTalk(register: Int): Array[Int] =
     if register == 0 then

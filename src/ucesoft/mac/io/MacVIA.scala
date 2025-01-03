@@ -182,7 +182,7 @@ class MacVIA(override val irqAction:Boolean => Unit,
         if belowSE then
           if (regs(DDRA) & 0x10) != 0 then overlay((value & 0x10) != 0)
         else
-          if (regs(DDRA) & 0x10) != 0 then iwm.setInternalDriveSE((value & 0x10) != 0)
+          if (regs(DDRA) & 0x10) != 0 && macModel == MacModel.SE then iwm.setInternalDriveSE((value & 0x10) != 0)
         /*PA5  */if (regs(DDRA) & 0x20) != 0 then iwm.setHeadSelLine((value & 0x20) != 0)
         /*PA6  */if (regs(DDRA) & 0x40) != 0 then video.selectVideoBuffer((value & 0x40) == 0)
       case PB =>

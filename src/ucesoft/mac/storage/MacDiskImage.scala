@@ -10,10 +10,12 @@ import scala.collection.mutable.{ArrayBuffer, ListBuffer}
  *         Created on 30/10/2024 15:20  
  */
 class MacDiskImage(val fileName:String,private val emptyDisk:Boolean = false) extends DiskImage:
+  import DiskImage.ImageFormat
+
   private final val BITS_PER_TRACK_GROUP = Array(74_640,68_240,62_200,55_980,49_760)
   private val WP = if emptyDisk then false else !new File(fileName).canWrite
   private var name : String = ""
-  private var isDC42Format = false
+  private var imageFormat : ImageFormat = ImageFormat.RAW
 
   private val tracks = Array.ofDim[Track](2,80)
 
@@ -32,6 +34,7 @@ class MacDiskImage(val fileName:String,private val emptyDisk:Boolean = false) ex
 
   def getDiskFileName: Option[String] = Option(fileName)
 
+  override def getFormat: ImageFormat = imageFormat
   override def isModified: Boolean = tracks.exists(_.exists(_.isModified))
   override def diskName: String = name
   override def getHeadCount: Int = encoding.sides
@@ -44,84 +47,175 @@ class MacDiskImage(val fileName:String,private val emptyDisk:Boolean = false) ex
       val error = flushChangesOnHostDisk()
       MessageBus.send(MessageBus.FloppyEjected(this,name,error))
 
-  override def isWriteProtected: Boolean = WP || isDC42Format // avoid to write back when format is DC42
+  override def isWriteProtected: Boolean = WP || !imageFormat.writeable // avoid to write back when format is DC42
 
   private def init(): Unit =
     if emptyDisk then
-      initTracks(null,null)
+      encodeGCRTraks(null,null)
     else
       loadFromFile()
 
-  /*
-   * DiskCopy 4.2 format
-   * ====================================================================================
-   * 0x00       byte        Length of image name string ('Pascal name length')
-   * 0x01-0x3F  63 bytes    Image name, in ascii, padded with NULs
-   * 0x40-0x43  BE_UINT32   Data size in bytes (of block starting at 0x54)
-   * 0x44-0x47  BE_UINT32   Tag size in bytes (of block starting after end of Data block)
-   * 0x48-0x4B  BE_UINT32   Data Checksum
-   * 0x4C-0x4F  BE_UINT32   Tag Checksum
-   * 0x50       byte        Disk encoding
-   * 0x51       byte        Format Byte
-   * 0x52-0x53  BE_UINT16   '0x01 0x00' ('Private Word') AKA Magic Number
-   * 0x54-...   variable    Image data
-   * ...-EOF    variable    Tag data
-   */
   private def loadFromFile(): Unit =
-    var in: RandomAccessFile = null
-
-    try
-      var data : Array[Byte] = null
-      var tags : Array[Byte] = null
-      val file = new File(fileName)
-      // check if it's a raw file
-      if file.length() == GCR400K.rawByteSize || file.length() == GCR800K.rawByteSize then
-        data = java.nio.file.Files.readAllBytes(file.toPath)
-        name = file.getName
-        if file.length() == GCR400K.rawByteSize then
-          encoding = GCR400K
-        else
-          encoding = GCR800K
-      else
-        in = new RandomAccessFile(file, "r")
-        in.seek(0x52) // Magic number
-        if in.read() != 0x01 || in.read() != 0x00 then
-          throw new IllegalArgumentException(s"Invalid format of DC42 image $fileName")
-        in.seek(0)
-        val nameLen = in.read()
-        val sb = new StringBuilder()
-        for _ <- 0 until nameLen do
-          sb += in.read().toChar
-        name = sb.toString.trim
-        in.seek(0x40)
-        val dataSize = in.read() << 24 | in.read() << 16 | in.read() << 8 | in.read()
-        val tagSize = in.read() << 24 | in.read() << 16 | in.read() << 8 | in.read()
-        // ignore checksums
-        in.seek(0x50)
-        encoding = in.read() match
-          case 0x00 => GCR400K // GCR CLV ssdd (400k)
-          case 0x01 => GCR800K // GCR CLV dsdd (800k)
-          case e => throw new IllegalArgumentException(s"Invalid disk encoding: $e")
-        val format = in.read() // skip this byte: format is already defined by encoding...for now
-        // image data
-        in.seek(0x54)
-        data = Array.ofDim[Byte](dataSize)
-        val readDataSize = in.read(data)
-        if readDataSize != dataSize then
-          throw new IllegalArgumentException(s"Invalid data size: expected $dataSize, found $readDataSize")
-        tags = Array.ofDim[Byte](tagSize)
-        val readTagSize = in.read(tags)
-        if readTagSize != tagSize then
-          throw new IllegalArgumentException(s"Invalid tag size: expected $tagSize, found $readTagSize")
-        
-        isDC42Format = true
-      initTracks(data,tags)
-    finally
-      if in != null then
-        in.close()
+    val file = new File(fileName)
+    if !checkRawFormat(file) && !checkDC42Format(file) && !checkMOOFFormat(file) then
+      throw new IllegalArgumentException(s"Invalid disk image format: $fileName")
   end loadFromFile
 
-  private def initTracks(data:Array[Byte],tags:Array[Byte]): Unit =
+  private def checkRawFormat(file:File): Boolean =
+    if file.length() == GCR400K.rawByteSize || file.length() == GCR800K.rawByteSize then
+      val data = java.nio.file.Files.readAllBytes(file.toPath)
+      name = file.getName
+      if file.length() == GCR400K.rawByteSize then
+        encoding = GCR400K
+      else
+        encoding = GCR800K
+
+      encodeGCRTraks(data, null)
+      imageFormat = ImageFormat.RAW
+      true
+    else
+      false
+  end checkRawFormat
+
+  /*
+     * DiskCopy 4.2 format
+     * ====================================================================================
+     * 0x00       byte        Length of image name string ('Pascal name length')
+     * 0x01-0x3F  63 bytes    Image name, in ascii, padded with NULs
+     * 0x40-0x43  BE_UINT32   Data size in bytes (of block starting at 0x54)
+     * 0x44-0x47  BE_UINT32   Tag size in bytes (of block starting after end of Data block)
+     * 0x48-0x4B  BE_UINT32   Data Checksum
+     * 0x4C-0x4F  BE_UINT32   Tag Checksum
+     * 0x50       byte        Disk encoding
+     * 0x51       byte        Format Byte
+     * 0x52-0x53  BE_UINT16   '0x01 0x00' ('Private Word') AKA Magic Number
+     * 0x54-...   variable    Image data
+     * ...-EOF    variable    Tag data
+     */
+  private def checkDC42Format(file:File): Boolean =
+    val in = new RandomAccessFile(file, "r")
+    try
+      in.seek(0x52) // Magic number
+      if in.read() != 0x01 || in.read() != 0x00 then
+        return false
+      in.seek(0)
+      val nameLen = in.read()
+      val sb = new StringBuilder()
+      for _ <- 0 until nameLen do
+        sb += in.read().toChar
+      name = sb.toString.trim
+      in.seek(0x40)
+      val dataSize = in.read() << 24 | in.read() << 16 | in.read() << 8 | in.read()
+      val tagSize = in.read() << 24 | in.read() << 16 | in.read() << 8 | in.read()
+      // ignore checksums
+      in.seek(0x50)
+      encoding = in.read() match
+        case 0x00 => GCR400K // GCR CLV ssdd (400k)
+        case 0x01 => GCR800K // GCR CLV dsdd (800k)
+        case e => throw new IllegalArgumentException(s"Invalid disk encoding: $e")
+      val format = in.read() // skip this byte: format is already defined by encoding...for now
+      // image data
+      in.seek(0x54)
+      val data = Array.ofDim[Byte](dataSize)
+      val readDataSize = in.read(data)
+      if readDataSize != dataSize then
+        println(s"Invalid data size: expected $dataSize, found $readDataSize")
+        return false
+      val tags = Array.ofDim[Byte](tagSize)
+      val readTagSize = in.read(tags)
+      if readTagSize != tagSize then
+        println(s"Invalid tag size: expected $tagSize, found $readTagSize")
+        return false
+
+      imageFormat = ImageFormat.DC42
+      encodeGCRTraks(data,tags)
+      true
+    finally
+      in.close()
+  end checkDC42Format
+
+  private def checkMOOFFormat(file:File): Boolean =
+    val HEADER = Array[Byte](0x4D, 0x4F, 0x4F, 0x46, 0xFF.toByte, 0x0A, 0x0D, 0x0A)
+    val in = new RandomAccessFile(file, "r")
+    try
+      val header = Array.ofDim[Byte](8)
+      in.read(header)
+      if !header.sameElements(HEADER) then
+        return false
+
+      val tmap = Array.ofDim[Int](80,2)
+
+      in.skipBytes(4) // skip CRC
+      val chunkHeader = Array.ofDim[Byte](8)
+      var continueReading = in.read(chunkHeader) == 8
+      while continueReading do
+        val chunkSize = (chunkHeader(7).toInt & 0xFF) << 24 | (chunkHeader(6).toInt & 0xFF) << 16 | (chunkHeader(5).toInt & 0xFF) << 8 | (chunkHeader(4).toInt & 0xFF)
+        val chunk = Array.ofDim[Byte](chunkSize)
+        in.read(chunk)
+        new String(chunkHeader, 0, 4) match
+          case "INFO" =>
+            // disk type
+            if chunk(1) != 1 && chunk(1) != 2 then
+              println(s"MOOF unsupported encoding type: ${chunk(1)}")
+              return false
+            encoding = chunk(1) match
+              case 1 => GCR400K
+              case 2 => GCR800K
+          case "TMAP" =>
+            for t <- 0 to 79 do
+              for s <- 0 to 1 do
+                tmap(t)(s) = chunk(t * 2 + s).toInt & 0xFF
+          case "TRKS" =>
+            for t <- 0 to 79 do
+              for s <- 0 to 1 do
+                if tmap(t)(s) == 0xFF then
+                  tracks(s)(t) = new Track(BITS_PER_TRACK_GROUP(t >> 4)) 
+                else
+                  tracks(s)(t) = new Track()
+                  val tpos = tmap(t)(s) << 3 // 8 bytes each entry
+                  val startingBlock = (chunk(tpos + 1).toInt & 0xFF) << 8 | (chunk(tpos).toInt & 0xFF)
+                  val blockCount = (chunk(tpos + 3).toInt & 0xFF) << 8 | (chunk(tpos + 2).toInt & 0xFF)
+                  var bitCount = (chunk(7).toInt & 0xFF) << 24 | (chunk(6).toInt & 0xFF) << 16 | (chunk(5).toInt & 0xFF) << 8 | (chunk(4).toInt & 0xFF)
+                  var byteCount = bitCount >> 3
+                  val trackData = Array.ofDim[Byte](byteCount + (if (bitCount % 8 != 0) 1 else 0))
+                  in.seek(startingBlock << 9)
+                  in.read(trackData)
+  
+                  var byteOffset = 0
+                  while byteCount > 0 do
+                    tracks(s)(t).setInt(trackData(byteOffset).toInt & 0xFF)
+                    byteOffset += 1
+                    bitCount -= 8
+                    byteCount -= 1
+                  if bitCount > 0 then
+                    var lastByte = trackData(byteOffset).toInt & 0xFF
+                    while bitCount > 0 do
+                      lastByte <<= 1
+                      if (lastByte & 0x100) != 0 then tracks(s)(t).setAndMoveOn() else tracks(s)(t).clearAndMoveOn()
+                      bitCount -= 1
+                end if
+                tracks(s)(t).finish()
+          case "META" =>
+          case cname =>
+            in.skipBytes(chunkSize)
+
+        continueReading = in.read(chunkHeader) == 8
+      end while
+      imageFormat = ImageFormat.MOOF
+//      for t <- 0 to 79 do 
+//        for s <- 0 to 1 do
+//          decodeSectorsForTrack(s, t) match
+//            case Left(e) =>
+//              println(s"$t/$s error $e")
+//            case Right(_) =>
+//              println(s"$t/$s OK!")
+    finally
+      in.close()
+
+    true
+  end checkMOOFFormat
+
+  private def encodeGCRTraks(data:Array[Byte],tags:Array[Byte]): Unit =
     var tmp : Array[Byte] = Array()
     var offset = 0
     for track <- 0 until 80 do
@@ -151,7 +245,7 @@ class MacDiskImage(val fileName:String,private val emptyDisk:Boolean = false) ex
           offset += interleave.length
         t.finish()
         tracks(side)(track) = t
-  end initTracks
+  end encodeGCRTraks
 
   private def getSectorInterleave(format:Int,sectorsPerTrack:Int): Array[Int] =
     val sectors = Array.fill(sectorsPerTrack)(0xFF)
@@ -167,7 +261,7 @@ class MacDiskImage(val fileName:String,private val emptyDisk:Boolean = false) ex
 
   override def flushChangesOnHostDisk(): Option[String] =
     import GCR.SectorDecoding.*
-    if !isModified || isDC42Format then return None
+    if !isModified || isWriteProtected then return None
 
     println(s"Flushing $name ...")
 

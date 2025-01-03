@@ -79,6 +79,25 @@ enum MacModel(val clockRateMhz:Int,
     scsi = true,
     floppySettings = FloppySettings(drivesNumber = 3, doubleDensity = true, fdhd = false)
   )
+  case CLASSIC extends MacModel(
+    clockRateMhz = 7_833_600,
+    ramSizesInK = Array(1024, 2 * 1024, 4 * 1024),
+    md5 = Array(
+      "C229BB677CB41B84B780C9E38A09173E", // Mac Classic, rom size 512K
+    ),
+    skipMemoryTestAddress = Some((0x000CFC, 0x574C5343, Size.Long)),
+    videoSettings = VideoSettings(
+      horizontalPixels = 512,
+      hblankInPixels = 192,
+      verticalLines = 342,
+      vblankLines = 28,
+      alternateVideoBufferOffset = -0x8000
+    ),
+    audioSettings = AudioSettings(alternateAudioBufferOffset = -0x5C00),
+    pramExtended = true,
+    scsi = true,
+    floppySettings = FloppySettings(drivesNumber = 2, doubleDensity = true, fdhd = false)
+  )
 
 case class FloppySettings(drivesNumber:Int,
                           doubleDensity:Boolean,
