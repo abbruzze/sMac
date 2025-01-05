@@ -93,11 +93,11 @@ class MacDrive(val driveIndex:Int,val clockSpeed:Int,override val doubleSide: Bo
   private def getTrackRPM: Int =
     if doubleSide then
       trackNumber >> 4 match
-        case 0 => 393//402
-        case 1 => 429//438
-        case 2 => 472//482
-        case 3 => 524//536
-        case 4 => 590//603
+        case 0 => 394
+        case 1 => 429
+        case 2 => 472
+        case 3 => 525
+        case 4 => 590
     else
       ((pwm_dutycycle - 0.094f) * (702.5f - 342.5f) / (0.91f - 0.094f) + 342.5f).toInt
 
@@ -165,7 +165,7 @@ class MacDrive(val driveIndex:Int,val clockSpeed:Int,override val doubleSide: Bo
   override def getBitOnHead(head:Int,moveAhead:Boolean): Boolean =
     if floppy == null then return false
 
-    if floppy.getHeadCount == 2 then
+    if floppy.getHeadCount == 2 && moveAhead then
       floppy.getTrack(head ^ 1, trackNumber).getAndMoveOn
 
     if moveAhead then
