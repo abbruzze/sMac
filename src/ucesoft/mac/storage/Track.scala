@@ -1,5 +1,7 @@
 package ucesoft.mac.storage
 
+import scala.util.Random
+
 object Track:
   def main(args:Array[String]): Unit =
     val track = new Track()
@@ -106,3 +108,13 @@ class Track(private var bitLength:Int = Int.MaxValue):
     for i <- 0 until bitLength do
       print(s"${if bitset(i) then 1 else 0} ")
     println()
+    
+  def fillRandom(): Unit =
+    val rnd = new Random()
+    bitset.clear()
+    var b = 0
+    currentPos = 0
+    while b < bitLength do
+      if rnd.nextBoolean() then setAndMoveOn() else clearAndMoveOn()
+      b += 1
+    currentPos = 0
