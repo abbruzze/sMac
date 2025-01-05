@@ -535,7 +535,6 @@ class IWM extends MACComponent:
   end cycle
 
   private def checkSector(byte: Int): Unit =
-    log.info("Checking sector %2X",byte)
     if sectorByteCounter > 0 then
       sectorByteCounter -= 1
       if sectorByteCounter == 0 then
