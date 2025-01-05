@@ -254,7 +254,7 @@ class RTC extends MACComponent:
         log.info("RTC write protect set to %s",wp)
       case x@(8|9|10|11) =>
         if !wp then pram(x) = value & 0xFF
-      case x if x >= 16 && x < 32 =>
+      case x if x >= 16 && x < 32 && x < pram.length =>
           if !wp then pram(x) = value & 0xFF
       case _ =>
           log.warning("RTC: writing to undefined write register: %d", cmd)
@@ -267,7 +267,7 @@ class RTC extends MACComponent:
       case 3|7 => ((seconds >> 24) & 0xFF).toInt
       case x@(8|9|10|11) =>
         pram(x)
-      case x if x >= 16 && x < 32 =>
+      case x if x >= 16 && x < 32 && x < pram.length =>
         pram(x)
       case _ =>
         log.warning("RTC: reading from undefined read register: %d",cmd)
