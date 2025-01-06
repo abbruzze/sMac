@@ -80,12 +80,14 @@ class MacVIA(override val irqAction:Boolean => Unit,
   private inline val KEYBOARD_RESPONSE_TIME = (160 + 170) * 8 // us
   private var KEYBOARD_CMD_EXE_WAIT_CYCLES = 0 // see setModel
   private inline val ADB_RESPONSE_CYCLES = 2350 // about 3ms (raw estimation that seems to work)
+  private var ADB_AUTOPOLLING_CYCLES = 0 // see setModel
 
   private var hblank = 0
   private var keyboardCommandWaitCycles = 0
   private var scsiIRQEnabled = false
   private var adbAckCycles = 0
   private var adbWroteSR = false
+  private var adbAutoPollingCycles = 0
 
   setModel(MAC128K)
 
@@ -94,6 +96,8 @@ class MacVIA(override val irqAction:Boolean => Unit,
     hblank = 0
     keyboardCommandWaitCycles = 0
     scsiIRQEnabled = false
+    adbWroteSR = false
+    adbAutoPollingCycles = 0
   end reset
 
   def isSCSIIRQEnabled: Boolean = scsiIRQEnabled
@@ -103,6 +107,7 @@ class MacVIA(override val irqAction:Boolean => Unit,
   override protected def setModel(model: MacModel): Unit =
     super.setModel(model)
     KEYBOARD_CMD_EXE_WAIT_CYCLES = (model.clockRateMhz / 1_000_000.0 * (KEYBOARD_CMD_OUT_TIME + KEYBOARD_RESPONSE_TIME)).toInt
+    ADB_AUTOPOLLING_CYCLES = model.clockRateMhz / 1000 * 5 // 5 ms
 
   override def read(address: Int): Int =
     log.info("VIA reading register %d",address & 0xF)
@@ -247,16 +252,21 @@ class MacVIA(override val irqAction:Boolean => Unit,
   override def clock(cycles: Long): Unit =
     super.clock(cycles)
 
+    // =============== ADB ======================
+    adbAutoPollingCycles += 1
+    if adbAutoPollingCycles == ADB_AUTOPOLLING_CYCLES then
+      adbAutoPollingCycles = 0
+      if srMode == 3 && macModel.ordinal >= MacModel.SE.ordinal && adb.isServiceRequestPending then
+        regs(SR) = 0xFF
+        irq_set(IRQ_SR)
+
     if adbAckCycles > 0 then
       adbAckCycles -= 1
       if adbAckCycles == 0 then
         // a VIA transfer was finished, sending byte to transceiver
         adb.clockInByte(regs(SR))
         irq_set(IRQ_SR)
-
-    if srMode == 3 && macModel.ordinal >= MacModel.SE.ordinal && adb.isServiceRequestPending then
-      regs(SR) = 0xFF
-      irq_set(IRQ_SR)
+    // ===========================================
 
     if keyboardCommandWaitCycles > 0 then
       val fromSE = macModel.ordinal >= MacModel.SE.ordinal
