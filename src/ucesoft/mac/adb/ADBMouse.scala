@@ -8,15 +8,18 @@ class ADBMouse extends ADBDevice(address = 3,handlerID = 1,name = "ADB Mouse"):
   private var xCounter = 0
   private var yCounter = 0
   private var buttonPressed = false
+  private var srCountdown = 0
 
   def moveDelta(deltaX:Int,deltaY:Int): Unit =
     xCounter += deltaX
     yCounter += deltaY
     serviceRequest = true // has new data
+    srCountdown = 10
 
   def setButtonPressed(pressed:Boolean): Unit = 
     buttonPressed = pressed
     serviceRequest = true // has new data
+    srCountdown = 10
 
   private inline def getAdjustedCounter(counter:Int): Int =
     var adj = counter & 0x3F
@@ -44,7 +47,10 @@ class ADBMouse extends ADBDevice(address = 3,handlerID = 1,name = "ADB Mouse"):
   override def commandTalk(register: Int): Array[Int] =
     if register == 0 then
       if !serviceRequest then return Array()
-      serviceRequest = false
+      if srCountdown > 0 then
+        srCountdown -= 1
+        if srCountdown == 0 then
+          serviceRequest = false
       
       //println(s"ADB Mouse: pressed=${buttonPressed} y=${getAdjustedCounter(yCounter)} x=${getAdjustedCounter(xCounter)}")
       val out = Array(
