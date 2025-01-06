@@ -615,6 +615,8 @@ class NCR5380 extends MACComponent:
       case 0x04 => 2
       case 0x02 => 1
       case 0x01 => 0
+      case 0x00 =>
+        return None // host
     Option(targets(id))
 
   private def checkSelection(): Unit =
