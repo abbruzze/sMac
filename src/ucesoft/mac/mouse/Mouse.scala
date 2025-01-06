@@ -1,6 +1,6 @@
 package ucesoft.mac.mouse
 
-import ucesoft.mac.{MACComponent, MacModel}
+import ucesoft.mac.{MACComponent, MacModel, MessageBus}
 import ucesoft.mac.adb.ADBMouse
 
 import java.awt.{Point, Robot, Toolkit}
@@ -20,7 +20,7 @@ trait Mouse extends MACComponent:
   def isButtonPressed: Boolean
   def setCapture(on:Boolean,component:JComponent): Unit
 
-class QuadMouse(zoomFactor:Int) extends Mouse with MouseListener with MouseMotionListener:
+class QuadMouse(private var zoomFactor:Int) extends Mouse with MouseListener with MouseMotionListener:
   private inline val X = 0
   private inline val Y = 1
 
@@ -43,6 +43,12 @@ class QuadMouse(zoomFactor:Int) extends Mouse with MouseListener with MouseMotio
     override def windowDeactivated(e: WindowEvent): Unit =
       componentActive = false
       component.setCursor(new java.awt.Cursor(java.awt.Cursor.DEFAULT_CURSOR))
+
+  override def onMessage(msg: MessageBus.Message): Unit =
+    msg match
+      case MessageBus.ZoomFactorChanged(source, zoomFactor) =>
+        this.zoomFactor = zoomFactor
+      case _ =>
 
   def X1: Int = primaries(X)
   def Y1: Int = primaries(Y)
