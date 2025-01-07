@@ -15,6 +15,7 @@ object MessageBus:
   case class Shutdown(override val source:AnyRef,configContext:ConfigContext) extends Message
   case class FloppyEjected(override val source:AnyRef,diskName:String,error:Option[String]) extends Message
   case class WarpMode(override val source:AnyRef,enabled:Boolean) extends Message
+  case class ZoomFactorChanged(override val source:AnyRef,zoomFactor:Int) extends Message
   // ============================================
   trait MessageListener:
     def onMessage(msg:Message): Unit
