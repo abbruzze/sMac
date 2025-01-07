@@ -80,22 +80,26 @@ class StoragePanel extends JPanel with IWM.DiskControllerListener with SCSIListe
     }
 
   override def onHeadSelected(driveIndex: Int, head: Int): Unit =
-    swing {
-      diskette(driveIndex).head = head
-      diskette(driveIndex).updateInfo()
-    }
+    if driveIndex < diskette.length then
+      swing {
+        diskette(driveIndex).head = head
+        diskette(driveIndex).updateInfo()
+      }
   override def onTrackChanged(driveIndex: Int, track: TrackPos): Unit =
-    swing {
-      diskette(driveIndex).track = track
-      diskette(driveIndex).updateInfo()
-    }
+    if driveIndex < diskette.length then
+      swing {
+        diskette(driveIndex).track = track
+        diskette(driveIndex).updateInfo()
+      }
   override def onSectorOnHead(driveIndex: Int, sector: Int): Unit =
-    swing {
-      diskette(driveIndex).sector = sector
-      diskette(driveIndex).updateInfo()
-    }
+    if driveIndex < diskette.length then
+      swing {
+        diskette(driveIndex).sector = sector
+        diskette(driveIndex).updateInfo()
+      }
   override def onMotorChanged(driveIndex: Int, on: Boolean): Unit =
-    swing { diskette(driveIndex).icon.setIcon(if on then disketteRead else disketteOff) }
+    if driveIndex < diskette.length then
+      swing { diskette(driveIndex).icon.setIcon(if on then disketteRead else disketteOff) }
   override def onFloppyInserted(driveIndex: Int, image: DiskImage): Unit =
     swing {
       diskette(driveIndex).doubleSide = image.getHeadCount == 2
