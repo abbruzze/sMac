@@ -149,9 +149,9 @@ class IWM extends MACComponent:
     EJECT_LSTRB_ACTIVE_CYCLES = clockSpeed / 1000 * 550 // < 750 ms (max time for lstrb)
 
     doubleSide = model.floppySettings.doubleDensity
-    drives = Array.ofDim[MacDrive](model.floppySettings.drivesNumber)
+    drives = Array.ofDim[MacDrive](3)//(model.floppySettings.drivesNumber)
     for i <- drives.indices do
-      drives(i) = new MacDrive(driveIndex = i,clockSpeed, doubleSide = doubleSide, present = true,trackChangeListener = diskListener)
+      drives(i) = new MacDrive(driveIndex = i,clockSpeed, doubleSide = doubleSide, present = i < model.floppySettings.drivesNumber,trackChangeListener = diskListener)
 
     log.info("IWM set model to %s: configuring %d %s drives",model.toString,model.floppySettings.drivesNumber,if doubleSide then "double side" else "single side")
 
