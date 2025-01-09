@@ -94,6 +94,7 @@ abstract class DirectAccessSCSITarget(override val id:Int) extends SCSITarget:
     0x04 -> 6,    // FORMAT UNIT
     0x08 -> 6,    // READ
     0x0A -> 6,    // WRITE
+    0x0B -> 6,    // SEEK
     0x12 -> 6,    // INQUIRY
     0x15 -> 6,    // MODE SELECT
     0x1A -> 6,    // MODE SENSE
@@ -101,7 +102,9 @@ abstract class DirectAccessSCSITarget(override val id:Int) extends SCSITarget:
     0x25 -> 10,   // READ CAPACITY
     0x28 -> 10,   // READ
     0x2A -> 10,   // WRITE
-    0x3C -> 10    // READ BUFFER
+    0x2B -> 10,   // SEEK
+    0x3C -> 10,   // READ BUFFER
+    0x2F -> 10    // VERIFY
   )
 
   override def identifyCommandLen(cmd:Int): Option[Int] = commandLenMap.get(cmd)
@@ -109,6 +112,10 @@ abstract class DirectAccessSCSITarget(override val id:Int) extends SCSITarget:
     import SCSITargetResponse.*
     //println(s"SCSI executing command: ${cmd.map(b => "%02X".format(b)).mkString(" ")}")
     cmd(0) match
+      case 0x2F => // VERIFY
+        Some(Status(STATUS_GOOD))
+      case 0x0B | 0x2B => // SEEK(6) SEEK(10)
+        Some(Status(STATUS_GOOD))
       case 0x00 => // UNIT TEST
         Some(Status(STATUS_GOOD))
       case 0x03 => // REQUEST SENSE
@@ -337,22 +344,31 @@ abstract class DirectAccessSCSITarget(override val id:Int) extends SCSITarget:
         val pageCode = cmd(2) & 0x3F
         val allocationLength = cmd(4)
         val data = Array.ofDim[Byte](allocationLength)
-        data(0) = pageCode.toByte
-        // the following codes are managed just to make HD SC Setup happy
-        pageCode match
-          case 0x01 => //  Read-Write Error Recovery mode page (01h)
-            data(1) = (data.length - 2).toByte
-            Some(DataIn(data))
-          case 0x03 => // Format Device mode page
-            data(1) = (data.length - 2).toByte
-            Some(DataIn(data))
-          case 0x30 => // Non standard mode page
-            data(1) = (data.length - 2).toByte
-            System.arraycopy(MODE_SENSE_30,0,data,14,MODE_SENSE_30.length)
-            Some(DataIn(data))
-          case _ =>
-            println(s"Unrecognized page mode $pageCode")
-            None
+        var dataOfs = 0
+        val pageCodes = if pageCode == 0x3F then Array(0x01,0x03,0x30) else Array(pageCode) // 3F means give me all page codes
+        var pc = 0
+        while pc < pageCodes.length do
+          data(dataOfs) = pageCodes(pc).toByte
+          // the following codes are managed just to make HD SC Setup happy
+          data(dataOfs) match
+            case 0x01 => //  Read-Write Error Recovery mode page (01h)
+              data(dataOfs + 1) = 0x0A
+              dataOfs += 0x0C
+            case 0x03 => // Format Device mode page
+              data(dataOfs + 1) = 0x16
+              data(dataOfs + 11) = 0x3F // sectors per track
+              data(dataOfs + 12) = 512 >> 8 // block size h
+              data(dataOfs + 13) = 512 & 0xFF // block size h
+              data(dataOfs + 15) = 1 // interleave
+              dataOfs += 18
+            case 0x30 => // Non standard mode page
+              data(dataOfs + 1) = (MODE_SENSE_30.length + 14).toByte
+              System.arraycopy(MODE_SENSE_30,0,data,dataOfs + 14,MODE_SENSE_30.length)
+              dataOfs += MODE_SENSE_30.length.toByte + 16
+            case _ =>
+              println(s"Unrecognized page mode $pageCode")
+          pc += 1
+        Some(DataIn(data))
       case 0x3C => // READ BUFFER
         val allocationLen = cmd(6) << 16 | cmd(7) << 8 | cmd(8)
         // returns an empty buffer
