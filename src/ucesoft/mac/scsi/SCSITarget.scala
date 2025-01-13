@@ -98,6 +98,7 @@ abstract class DirectAccessSCSITarget(override val id:Int) extends SCSITarget:
     0x12 -> 6,    // INQUIRY
     0x15 -> 6,    // MODE SELECT
     0x1A -> 6,    // MODE SENSE
+    0x1E -> 6,    // PREVENT-ALLOW MEDIUM REMOVAL
     // group 1 ten-byte commands
     0x25 -> 10,   // READ CAPACITY
     0x28 -> 10,   // READ
@@ -112,6 +113,8 @@ abstract class DirectAccessSCSITarget(override val id:Int) extends SCSITarget:
     import SCSITargetResponse.*
     //println(s"SCSI executing command: ${cmd.map(b => "%02X".format(b)).mkString(" ")}")
     cmd(0) match
+      case 0x1E => // PREVENT-ALLOW MEDIUM REMOVAL
+        Some(Status(STATUS_GOOD))
       case 0x2F => // VERIFY
         Some(Status(STATUS_GOOD))
       case 0x0B | 0x2B => // SEEK(6) SEEK(10)
@@ -438,7 +441,8 @@ abstract class DirectAccessSCSITarget(override val id:Int) extends SCSITarget:
         println("Command not yet implemented: %02X".format(cmd(0)))
         None
 
-  def readBlocks(block:Int,size:Int): Option[Array[Byte]]
-  def writeBlocks(block:Int,data:Array[Byte]): Boolean
+  protected def readBlocks(block:Int,size:Int): Option[Array[Byte]]
+  protected final def writeBlocks(block:Int,data:Array[Byte]): Boolean = writeBlocks(block,data,0,data.length)
+  protected def writeBlocks(block:Int,data:Array[Byte],offset:Int,size:Int): Boolean
 
 end DirectAccessSCSITarget
