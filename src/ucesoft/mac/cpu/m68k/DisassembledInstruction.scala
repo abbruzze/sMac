@@ -1,7 +1,7 @@
 package ucesoft.mac.cpu.m68k
 
 case class DisassembledInstruction(address:Int,opcode:Int,mnemonic:String,extendedWords:List[Int] = Nil,op1:Option[String] = None,op2:Option[String] = None):
-  final val size : Int = 2 + (extendedWords.size << 1)
+  final val size : Int = if opcode == -1 then 2 else 2 + (extendedWords.size << 1)
   final val isValidOpCode = opcode != -1
 
   override def toString: String =

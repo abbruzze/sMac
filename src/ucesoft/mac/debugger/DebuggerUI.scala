@@ -243,7 +243,8 @@ object DebuggerUI {
     def copyToClipboard(): Unit =
       val sb = new StringBuilder()
       for r <- rows do
-        sb.append(s"${r.disString}\n")
+        val dis = r.disString.toUpperCase().replace(".SHORT","DW")
+        sb.append(s"$dis\n")
 
       java.awt.Toolkit.getDefaultToolkit.getSystemClipboard.setContents(java.awt.datatransfer.StringSelection(sb.toString), null)
 
