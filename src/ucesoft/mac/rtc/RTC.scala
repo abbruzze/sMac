@@ -43,6 +43,7 @@ class RTC extends MACComponent:
   override def onMessage(msg: MessageBus.Message): Unit =
     msg match
       case MessageBus.Shutdown(_,ConfigContext(homeDir,_,_)) =>
+        MessageBus.send(MessageBus.ShuttingdownItem(this,"Saving pram ..."))
         val pramDir = new File(homeDir,"pram")
         val pramFile = new File(pramDir,s"pram$macModel.bin")
         java.nio.file.Files.write(pramFile.toPath,pram.map(_.toByte))

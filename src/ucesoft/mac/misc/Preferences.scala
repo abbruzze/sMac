@@ -5,6 +5,10 @@ import scala.collection.mutable
 
 object Preferences {
   // ==============================================================
+  final val ROM_IMAGE = "rom"
+  final val SCSI_DEV = "scsi-"
+  final val FLOPPY = "floppy-"
+  final val MEMORY = "memory"
   // ==============================================================
   
   class PreferenceIllegalArgumentException(msg:String) extends Exception(msg)
@@ -132,6 +136,7 @@ class Preferences {
   }
 
   def preferences : List[Preference[?]] = prefs.toList
+  def clear(): Unit = prefs.clear()
 
   def parseAndLoad(args:Array[String],props:Properties) : Option[String] = {
     var p = 0

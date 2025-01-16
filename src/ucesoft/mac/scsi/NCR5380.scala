@@ -179,6 +179,7 @@ class NCR5380 extends MACComponent:
       case MessageBus.Shutdown(_,_) =>
         for s <- targets do 
           if s != null then
+            MessageBus.send(MessageBus.ShuttingdownItem(this,s"Unmounting SCSI drive #${s.id} [${s.name}] ..."))
             println("SCSI disconnecting target %d".format(s.id))
             s.disconnect()
       case _ =>

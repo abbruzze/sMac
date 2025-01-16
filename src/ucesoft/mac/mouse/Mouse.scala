@@ -20,7 +20,7 @@ trait Mouse extends MACComponent:
   def isButtonPressed: Boolean
   def setCapture(on:Boolean,component:JComponent): Unit
 
-class QuadMouse(private var zoomFactor:Int) extends Mouse with MouseListener with MouseMotionListener:
+class QuadMouse(private var zoomFactorX:Int,private var zoomFactorY:Int) extends Mouse with MouseListener with MouseMotionListener:
   private inline val X = 0
   private inline val Y = 1
 
@@ -46,8 +46,9 @@ class QuadMouse(private var zoomFactor:Int) extends Mouse with MouseListener wit
 
   override def onMessage(msg: MessageBus.Message): Unit =
     msg match
-      case MessageBus.ZoomFactorChanged(source, zoomFactor) =>
-        this.zoomFactor = zoomFactor
+      case MessageBus.ZoomFactorChanged(source, zx, zy) =>
+        zoomFactorX = zx
+        zoomFactorY = zy
       case _ =>
 
   def X1: Int = primaries(X)
@@ -102,6 +103,8 @@ class QuadMouse(private var zoomFactor:Int) extends Mouse with MouseListener wit
   override def isButtonPressed: Boolean = pressed
 
   override def mousePressed(e: MouseEvent): Unit =
+    if !captureOn || !componentActive then return
+
     pressed = true
     adbMouse.setButtonPressed(true)
   override def mouseReleased(e: MouseEvent): Unit =
@@ -128,7 +131,15 @@ class QuadMouse(private var zoomFactor:Int) extends Mouse with MouseListener wit
     if !captureOn || !componentActive then return
 
     if lastX != -1 then
-      move((e.getX - lastX) / zoomFactor,(e.getY - lastY) / zoomFactor)
+      val dx = e.getX - lastX
+      val dy = e.getY - lastY
+      var mx = dx / zoomFactorX
+      if dx != 0 && mx == 0 then
+        if dx < 0 then mx = -1 else mx = 1
+      var my = dy / zoomFactorY
+      if dy != 0 && my == 0 then
+        if dy < 0 then my = -1 else my = 1
+      move(mx,my)
 
     lastX = e.getX
     lastY = e.getY

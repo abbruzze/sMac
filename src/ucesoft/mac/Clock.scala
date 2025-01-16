@@ -40,7 +40,7 @@ class Clock (val name: String,private var clocksPerSecond: Int,val autoClockIncr
   private var throttleStartedAt = 0L
   private var skipThrottle = false
   private var throttleCycleCount = 0
-  private inline val THROTTLE_CYCLE_TARGET = 10_000
+  private inline val THROTTLE_CYCLE_TARGET = 500
   private inline val PERFORMANCE_MEASUREMENT_INTERVAL_SECONDS = 1 * 1000
   private var freqDiv1000, freqInvBy1000 = 0.0
 
