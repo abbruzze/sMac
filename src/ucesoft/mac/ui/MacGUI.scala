@@ -48,6 +48,7 @@ class MacGUI extends MessageBus.MessageListener:
   private val debugMenuItem = new JCheckBoxMenuItem("Debugger")
   private val warpItem = new JCheckBoxMenuItem("Warp mode")
   private val mouseCapItem = new JCheckBoxMenuItem("Mouse capture")
+  private val autoWarpItem = new JCheckBoxMenuItem("Auto-warp")
 
   private val mac = new Motherboard
   private val debugger = new Debugger(m68k = mac.m68k, video = mac.video, () => debugMenuItem.setSelected(false), mac.video,mac.via,mac.rtc,mac.iwm,mac.scc,mac.audio,mac.keyboard,mac.scsi,mac.adb)
@@ -63,6 +64,8 @@ class MacGUI extends MessageBus.MessageListener:
   private var lastDirectory : String = uninitialized
   private var memoryBytes = -1
 
+  private var autoWarp = false
+
   private var anyBootingError = false
   private var isShuttingDown = false
 
@@ -72,6 +75,9 @@ class MacGUI extends MessageBus.MessageListener:
     msg match
       case MessageBus.FloppyEjected(_,diskName,Some(error)) if !isShuttingDown =>
         JOptionPane.showMessageDialog(frame,s"Cannot flush floppy disk '$diskName': $error","Floppy error",JOptionPane.ERROR_MESSAGE)
+      case MessageBus.FloppyMotorOn(_,_,isOn) =>
+        if autoWarp then
+          warpMode(isOn)
       case _ =>
 
   private def reset(hard:Boolean): Unit = ???
@@ -110,6 +116,8 @@ class MacGUI extends MessageBus.MessageListener:
     if conf.homeDir.getName.isEmpty then
       println("home directory env variable not set")
       sys.exit(1)
+
+    MessageBus.add(this)
 
     mac.masterClock.setErrorHandler(errorHandler)
     // main frame
@@ -164,6 +172,10 @@ class MacGUI extends MessageBus.MessageListener:
         catch
           case _:NumberFormatException =>
             println(s"Invalid memory setting: $mem")
+    }
+    pref.add(AUTO_WARP, "enabled automatically warp mode when accessing floppies", false) { aw =>
+      autoWarp = aw
+      autoWarpItem.setSelected(aw)
     }
 
     if pref.checkForHelp(args) then
@@ -400,6 +412,8 @@ class MacGUI extends MessageBus.MessageListener:
     warpItem.setAccelerator(KeyStroke.getKeyStroke(java.awt.event.KeyEvent.VK_W, java.awt.event.InputEvent.ALT_DOWN_MASK))
     fileMenu.add(warpItem)
     warpItem.addActionListener(_ => warpMode(warpItem.isSelected))
+    fileMenu.add(autoWarpItem)
+    autoWarpItem.addActionListener(_ => autoWarp = autoWarpItem.isSelected)
 
     val exitItem = new JMenuItem("Exit")
     exitItem.setAccelerator(KeyStroke.getKeyStroke(java.awt.event.KeyEvent.VK_X,java.awt.event.InputEvent.ALT_DOWN_MASK))
@@ -425,7 +439,8 @@ class MacGUI extends MessageBus.MessageListener:
     val muteItem = new JCheckBoxMenuItem("Mute volume")
     muteItem.setAccelerator(KeyStroke.getKeyStroke(java.awt.event.KeyEvent.VK_U, java.awt.event.InputEvent.ALT_DOWN_MASK))
     toolsMenu.add(muteItem)
-    muteItem.addActionListener(_ => mac.audio.mute(muteItem.isSelected))
+    muteItem.addActionListener(_ =>
+      mac.audio.mute(muteItem.isSelected))
 
     val gifItem = new JMenuItem("GIF recording ...")
     toolsMenu.add(gifItem)
