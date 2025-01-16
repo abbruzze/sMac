@@ -28,6 +28,7 @@ class AudioDevice(sampleRate:Int) extends MACComponent with Runnable with Audio:
   private var stopped = false
   private var lastPerformance = 0
   private var alternateAudioBuffer = false
+  private var turnedOn = false
 
   setBufferMillisNow(bufferInMillis)
   thread.setPriority(Thread.MAX_PRIORITY)
@@ -144,7 +145,7 @@ class AudioDevice(sampleRate:Int) extends MACComponent with Runnable with Audio:
 
   override def turn(on: Boolean): Unit =
     log.info("Audio is %s",if on then "on" else "off")
-    muted = !on
+    turnedOn = on
   override def setVolumeLevel(level: Int): Unit =
     volumeLevel = level
     val volume = (level / 7.0 * 100.0).toInt
@@ -161,7 +162,7 @@ class AudioDevice(sampleRate:Int) extends MACComponent with Runnable with Audio:
       macModel.audioSettings.audioBufferAddress
 
   override def newSample(sample: Byte): Unit =
-    buffer(bufferId) = if muted || volumeLevel == 0 then 0 else sample ; bufferId += 1
+    buffer(bufferId) = if !turnedOn || muted || volumeLevel == 0 then 0 else sample ; bufferId += 1
     if bufferId == bufferSize then
       queue.put(buffer)
       if bufferPendingSize != -1 then
