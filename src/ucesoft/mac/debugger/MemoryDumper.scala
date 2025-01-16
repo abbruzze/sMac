@@ -135,7 +135,12 @@ class MemoryDumper(mem:Array[Int],
     val searchPanel = new JPanel(new FlowLayout(FlowLayout.LEFT))
     searchPanel.add(new JLabel("Goto:"))
     val gotoTF = new JTextField(5)
+    gotoTF.setToolTipText("Hex address to go to")
+    val searchHexTF = new JTextField(10)
+    searchHexTF.setToolTipText("Hex bytes to search (without spaces, 2 digits each) or a string to search between double quotes")
     searchPanel.add(gotoTF)
+    searchPanel.add(new JLabel("Search Hex:"))
+    searchPanel.add(searchHexTF)
     gotoTF.addActionListener(_ => {
       try
         val address = Integer.parseInt(gotoTF.getText,16)
@@ -151,6 +156,25 @@ class MemoryDumper(mem:Array[Int],
           JOptionPane.showMessageDialog(frame,"Invalid hex address","Address mismatch",JOptionPane.ERROR_MESSAGE)
         case _: IllegalArgumentException =>
           JOptionPane.showMessageDialog(frame, s"Invalid address must be >= ${startAddress.toHexString}", "Address mismatch", JOptionPane.ERROR_MESSAGE)
+    })
+    searchHexTF.addActionListener(_ => {
+      val text = searchHexTF.getText
+      try
+        val arrayToSearch = if text.startsWith("\"") && text.endsWith("\"") then
+          text.substring(1,text.length - 1).getBytes().map(_.toInt & 0xFF)
+        else
+          text.sliding(2,2).map(h => Integer.parseInt(h,16)).toArray
+        ByteArraySearch.findSubArrayIndex(mem, arrayToSearch) match
+          case None =>
+          case Some(address) =>
+            val row = (address - startAddress) >> 4
+            if row < table.getRowCount then
+              val cellRect = table.getCellRect(row, 0, true)
+              table.scrollRectToVisible(cellRect)
+              table.getSelectionModel.setSelectionInterval(row,row)
+      catch
+        case e:NumberFormatException =>
+          JOptionPane.showMessageDialog(frame, s"Invalid hex array: $text", "Hex array mismatch", JOptionPane.ERROR_MESSAGE)
     })
 
     mainPanel.add("South",searchPanel)
