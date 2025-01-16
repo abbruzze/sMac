@@ -9,6 +9,7 @@ object Preferences {
   final val SCSI_DEV = "scsi-"
   final val FLOPPY = "floppy-"
   final val MEMORY = "memory"
+  final val AUTO_WARP = "auto-warp"
   // ==============================================================
   
   class PreferenceIllegalArgumentException(msg:String) extends Exception(msg)

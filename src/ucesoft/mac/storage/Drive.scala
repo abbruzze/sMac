@@ -152,7 +152,9 @@ class MacDrive(val driveIndex:Int,val clockSpeed:Int,override val doubleSide: Bo
   override def setMotorOn(on:Boolean): Unit =
     val oldMotorOn = motorOn
     super.setMotorOn(on)
-    if oldMotorOn ^ motorOn then trackChangeListener.onMotorChanged(driveIndex, on)
+    if oldMotorOn ^ motorOn then 
+      trackChangeListener.onMotorChanged(driveIndex, on)
+      MessageBus.send(MessageBus.FloppyMotorOn(this,driveIndex,motorOn))
 
   override def isStepping: Boolean = stepping > 0
 
