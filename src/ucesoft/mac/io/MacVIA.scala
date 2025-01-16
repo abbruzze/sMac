@@ -7,7 +7,7 @@ import ucesoft.mac.audio.Audio
 import ucesoft.mac.keyboard.MacKeyboard
 import ucesoft.mac.mouse.QuadMouse
 import ucesoft.mac.rtc.RTC
-import ucesoft.mac.storage.IWM
+import ucesoft.mac.storage.DiskController
 import ucesoft.mac.video.MacVideo
 
 import javax.swing.ImageIcon
@@ -70,7 +70,7 @@ class MacVIA(override val irqAction:Boolean => Unit,
              video:MacVideo,
              mouse:QuadMouse,
              rtc:RTC,
-             iwm:IWM,
+             iwm:DiskController,
              keyboard: MacKeyboard,
              adb:ADBTransceiver,
              overlay:Boolean => Unit) extends VIA(irqAction):

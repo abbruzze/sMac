@@ -1,11 +1,11 @@
 package ucesoft.mac.mmu
 
 import ucesoft.mac.MacModel.PLUS
-import ucesoft.mac.cpu.m68k.{M68000, Memory, Size}
+import ucesoft.mac.cpu.m68k.{Memory, Size}
 import ucesoft.mac.io.MacVIA
 import ucesoft.mac.scsi.NCR5380
 import ucesoft.mac.serial.Z8530
-import ucesoft.mac.storage.IWM
+import ucesoft.mac.storage.DiskController
 import ucesoft.mac.{MACComponent, MacModel}
 
 import java.util
@@ -16,7 +16,7 @@ import scala.annotation.switch
  *         Created on 20/11/2024 12:00  
  */
 class MMU(val scc:Z8530,
-          val iwm:IWM,
+          val iwm:DiskController,
           val via:MacVIA,
           val ncr5380:NCR5380) extends MACComponent with Memory:
   override protected val componentName = "MMU"

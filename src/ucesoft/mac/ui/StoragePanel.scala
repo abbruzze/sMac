@@ -1,7 +1,7 @@
 package ucesoft.mac.ui
 
 import ucesoft.mac.scsi.{SCSIListener, SCSITarget}
-import ucesoft.mac.storage.{DiskImage, IWM, TrackPos}
+import ucesoft.mac.storage.{DiskController, DiskImage, TrackPos}
 
 import java.awt.{Color, FlowLayout, Font}
 import javax.swing.*
@@ -10,7 +10,7 @@ import javax.swing.*
  * @author Alessandro Abbruzzetti
  *         Created on 02/12/2024 14:31  
  */
-class StoragePanel extends JPanel with IWM.DiskControllerListener with SCSIListener:
+class StoragePanel extends JPanel with DiskController.DiskControllerListener with SCSIListener:
   private val disketteDisabled = new ImageIcon(getClass.getResource("/resources/disk_disabled.png"))
   private val disketteOff = new ImageIcon(getClass.getResource("/resources/disk_off.png"))
   private val disketteRead = new ImageIcon(getClass.getResource("/resources/disk_read.png"))

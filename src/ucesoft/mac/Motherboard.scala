@@ -11,7 +11,7 @@ import ucesoft.mac.mouse.QuadMouse
 import ucesoft.mac.rtc.RTC
 import ucesoft.mac.scsi.NCR5380
 import ucesoft.mac.serial.Z8530
-import ucesoft.mac.storage.IWM
+import ucesoft.mac.storage.{DiskController, IWM}
 import ucesoft.mac.video.MacVideo
 import ucesoft.mac.video.MacVideo.VideoSignalListener
 
@@ -29,9 +29,9 @@ class Motherboard extends MACComponent with Clockable with VideoSignalListener w
   final val scsi = new NCR5380
   final val rtc = new RTC
   final val scc = new Z8530(sccIRQLow)
-  final val iwm = new IWM
+  final val iwm : DiskController = new IWM
   final val video = new MacVideo
-  final val mouse = new QuadMouse(zoomFactor = 2)
+  final val mouse = new QuadMouse(zoomFactorX = 2,zoomFactorY = 2)
   final val keyboard = new MacKeyboard
   final val audio = new AudioDevice((370 * 60.15).toInt) // 22.25 Khz
   final val via = new MacVIA(viaIRQLow, audio, video, mouse, rtc, iwm, keyboard, adb, setOverlay)
@@ -46,6 +46,11 @@ class Motherboard extends MACComponent with Clockable with VideoSignalListener w
   private var warpMode = false
   private var viaIRQ = false
   private var scsiIRQ = false
+
+  private var pendingSwitchIRQ = false
+
+  def pushSwitch(): Unit =
+    pendingSwitchIRQ = true
 
   private def sccIRQLow(low: Boolean): Unit =
     if low then m68kIRQLevel |= 2 else m68kIRQLevel &= ~2
@@ -86,6 +91,8 @@ class Motherboard extends MACComponent with Clockable with VideoSignalListener w
     add(mmu)
     add(m68k)
     add(adb)
+
+    setLogger(log)
 
     m68k.setBusAccessListener(this)
     masterClock.setClockable(this)
@@ -152,7 +159,14 @@ class Motherboard extends MACComponent with Clockable with VideoSignalListener w
           scc.setDCD(1, mouse.Y1 != 0)
   end loopDevices
 
-  override final def clock(cycles: Long): Unit = m68k.execute()
+  override final def clock(cycles: Long): Unit = 
+    m68k.execute()
+    if pendingSwitchIRQ then
+      pendingSwitchIRQ = false
+      m68k.interrupt(4)
+      m68k.setInterruptAckListener(_ => {
+        m68k.setInterruptAckListener(null)
+      })
 
   override def onVBlank(on: Boolean): Unit = via.CA1In(!on)
 

@@ -42,16 +42,21 @@ package ucesoft.mac.storage
  * there is a 2-byte CRC checksum which is calculated on all the just-mentioned bytes.
  * The data field contains a 4-byte data mark, 512 bytes of data, and a 2-byte CRC. The 12 bytes
  * of tag information included in GCR sectors is not supported on MFM disks.
+ *
+ * Synchronization is accomplished by means of the sync field and the mark bytes that follow it.
+ * Before writing an index, address, or data mark, the writer writes a sync field of twelve 0x00 bytes.
+ * This appears to the unsynchronized reader as a sequence of 96 flux transitions, each separated by two microseconds.
+ * The reader can look for this sequence immediately followed by three mark bytes and, on finding it, know that it is synchronized.
  */
 object MFM:
-  private inline val INDEX_MARK = 0xC2
-  private inline val INDEX_MARK_NEXT_BYTE = 0xFC
-  private inline val ADDRESS_MARK = 0xA1
+  private inline val INDEX_MARK             = 0xC2
+  private inline val INDEX_MARK_NEXT_BYTE   = 0xFC
+  private inline val ADDRESS_MARK           = 0xA1
   private inline val ADDRESS_MARK_NEXT_BYTE = 0xFE
-  private inline val CRC_ADDRESS_MARK = 45616 // 45616 = crc of A1 x 3, FE x 1
-  private inline val DATA_MARK = 0xA1
-  private inline val DATA_MARK_NEXT_BYTE = 0xFB
-  private inline val CRC_DATA_MARK = 58005 // 58005 crc of A1 x 3, FB x 1
+  private inline val CRC_ADDRESS_MARK       = 45616 // 45616 = crc of A1 x 3, FE x 1
+  private inline val DATA_MARK              = 0xA1
+  private inline val DATA_MARK_NEXT_BYTE    = 0xFB
+  private inline val CRC_DATA_MARK          = 58005 // 58005 crc of A1 x 3, FB x 1
 
   private final val crcCache = {
     val cache = Array.ofDim[Int](256)
@@ -69,13 +74,17 @@ object MFM:
   }
 
   def main(args:Array[String]): Unit =
-    println(byte2MFM(0xA1,true).toBinaryString.sliding(2,2).mkString("_"))
-    println(byte2MFM(0xA1).toBinaryString.sliding(2,2).mkString("_"))
+    def fillz(s:String): String = ("0" * (16 - s.length)) + s
+    println(fillz(byte2MFM(0xA1,true).toBinaryString).sliding(4,4).mkString(" "))
+    println(fillz(byte2MFM(0xA1,false).toBinaryString).sliding(4,4).mkString(" "))
+    println(byte2MFM(0xC2,true).toHexString)
+    println(0xA1.toBinaryString)
+    //println(byte2MFM(0xA1).toBinaryString.sliding(2,2).mkString("_"))
     println(mfm2Byte(byte2MFM(0xA1,true)).toHexString)
 
   /**
-   * Encode a byte into a word: the even bits represents the byte, the odd ones the clock.
-   * If isMark is true a clock on 4th position will be dropped, otherwise the clocks will follow the MFM encoding:
+   * Encode a byte into a word: the odd bits represents the byte, the even ones the clock.
+   * If isMark is true a clock on 3rd position will be dropped, otherwise the clocks will follow the MFM encoding:
    * A pair of "O"s causes a clock pulse to occur on the common cell boundary of the two "O"s.
    */
   def byte2MFM(byte:Int,isMark:Boolean = false): Int =
@@ -84,15 +93,15 @@ object MFM:
     var bit = 7
     while bit >= 0 do
       val b = (byte & (1 << bit)) != 0
-      if b then mfm |= 1 << ((bit << 1) + 1)
+      if b then mfm |= 1 << (bit << 1)
       if bit < 7 then
         if !prev && !b then // 00
-          mfm |= 1 << ((bit + 1) << 1)
+          mfm |= 1 << ((bit << 1) + 1)
       prev = b
       bit -= 1
     if isMark then
-      // drop 4th clock bit
-      mfm &= ~(1 << 6)
+      // drop 3rd clock bit
+      mfm &= ~(1 << 5)
     mfm
   end byte2MFM
 
@@ -103,11 +112,11 @@ object MFM:
     var byte = 0
     var bit = 7
     while bit >= 0 do
-      byte |= (mfm & (1 << ((bit << 1) + 1))) >> (bit + 1)
+      byte |= (mfm & (1 << (bit << 1))) >> bit
       bit -= 1
     byte
 
-  private def crc(b:Int,crc:Int = 0xFFFF) : Int =
+  def crc(b:Int,crc:Int = 0xFFFF) : Int =
     val _crc = crc & 0xFFFF
     val _b = b & 0xFF
     (crcCache(_crc >> 8 ^ _b) ^ _crc << 8) & 0xFFFF
@@ -124,10 +133,7 @@ object MFM:
     // 4. Gap to first sector (50)
     for _ <- 1 to 50 do track.setInt(byte2MFM(0x4E),bits = 16)
     // sectors
-    val sectorsPerTrack = diskFormat match
-      case DiskImage.DiskEncoding.MFM720K => 9
-      case DiskImage.DiskEncoding.MFM1440K => 18
-      case _ => throw new IllegalArgumentException("Invalid disk encoding for MFM")
+    val sectorsPerTrack = diskFormat.interleave(0).length
     val interleave = diskFormat.interleave(0).map(_ + 1) // only 1 group; MFM sectors start from 1 (not 0)
     val trackOffset = trackId * 2 * sectorsPerTrack * 512 // 2 sides, 512 byte per sector
     for sector <- interleave do

@@ -1,19 +1,11 @@
 package ucesoft.mac.storage
 
 import ucesoft.mac.MacModel.MAC128K
+import ucesoft.mac.storage.DiskController.DiskControllerListener
 import ucesoft.mac.{MACComponent, MacModel, MessageBus}
 
 import javax.swing.ImageIcon
 
-object IWM:
-  trait DiskControllerListener:
-    def onHeadSelected(driveIndex:Int,head:Int): Unit
-    def onTrackChanged(driveIndex:Int,track:TrackPos): Unit
-    def onSectorOnHead(driveIndex: Int, sector:Int): Unit
-    def onMotorChanged(driveIndex:Int,on:Boolean): Unit
-    def onFloppyInserted(driveIndex:Int,image:DiskImage): Unit
-    def onFloppyEjected(driveIndex:Int): Unit
-    def onFloppyModeChanged(driveIndex:Int,writing:Boolean): Unit
 /*
  * @author Alessandro Abbruzzetti
  *         Created on 05/11/2024 18:59
@@ -32,18 +24,17 @@ object IWM:
  *         Q7	      0xDFFFFF	      0xDFFDFF	        Selects which IWM register to access
  *         HEADSEL	Through VIA	    Through VIA	      Two purposes: selects the drive head to read/write data from either side of the disk (in double-sided drives) and plays part in drive register selection.
  */
-class IWM extends MACComponent:
-  import IWM.*
+class IWM extends DiskController:
   override protected val componentName = "IWM"
   override protected val icon = new ImageIcon(getClass.getResource("/resources/trace/iwm.png"))
 
-  private var MOTOR_OFF_1_SEC_CYCLES = 0 // see setModel
+  protected var MOTOR_OFF_1_SEC_CYCLES = 0 // see setModel
   private var EJECT_LSTRB_ACTIVE_CYCLES = 0 // see setModel
   // driveRegisterSelection's bits
   inline private val SEL_MASK = 0b0001
-  inline private val CA0_MASK = 0b0010
-  inline private val CA1_MASK = 0b0100
-  inline private val CA2_MASK = 0b1000
+  inline protected val CA0_MASK = 0b0010
+  inline protected val CA1_MASK = 0b0100
+  inline protected val CA2_MASK = 0b1000
   // iwmRegisterSelection's bits
   inline private val Q7_MASK = 0b001
   inline private val Q6_MASK = 0b010
@@ -54,20 +45,20 @@ class IWM extends MACComponent:
   // mode Motor-off timer bit
   inline private val MODE_MOTOR_OFF_TIMER_MASK = 0b00000100
 
-  private var driveRegisterSelection = 0 // CA2 CA1 CA0 SEL
+  protected var driveRegisterSelection = 0 // CA2 CA1 CA0 SEL
   private var iwmRegisterSelection = 0   // ENABLE Q6 Q7
-  private var lstrb = false
+  protected var lstrb = false
   private var enable = false
   private var externalDrive = false
   private var internalDriveSE = false
   private var headsel = false
   private var mode = 0
-  // number of cucles to eject a disk
-  private var ejecting = 0
+  // number of cycles to eject a disk
+  protected var ejecting = 0
   // drive index of the ejecting floppy
-  private var ejectingDriveIndex = 0
+  protected var ejectingDriveIndex = 0
   // number of cycles to turn off the motor
-  private var motorIsTurningOff = 0
+  protected var motorIsTurningOff = 0
 
   // current bit cycles
   private var bitCycles = 0
@@ -95,7 +86,7 @@ class IWM extends MACComponent:
 
   private var eventListeners: List[DiskControllerListener] = Nil
 
-  private val diskListener = new DiskControllerListener:
+  protected val diskListener = new DiskControllerListener:
     override def onHeadSelected(driveIndex:Int,head:Int): Unit =
       eventListeners.foreach(_.onHeadSelected(driveIndex,head))
     override def onTrackChanged(driveIndex: TrackPos, track: TrackPos): Unit =
@@ -111,14 +102,13 @@ class IWM extends MACComponent:
     override def onFloppyModeChanged(driveIndex: TrackPos, writing: Boolean): Unit =
       eventListeners.foreach(_.onFloppyModeChanged(driveIndex,writing))
 
-  private var drives : Array[MacDrive] = Array()
+  protected var drives : Array[MacDrive] = Array()
 
   setModel(MAC128K)
 
   override def onMessage(msg: MessageBus.Message): Unit =
     msg match
       case MessageBus.Shutdown(_,_)=>
-        println("Ejecting floppies ...")
         drives.foreach(_.ejectFloppy())
       case _ =>
 
@@ -149,9 +139,12 @@ class IWM extends MACComponent:
     EJECT_LSTRB_ACTIVE_CYCLES = clockSpeed / 1000 * 550 // < 750 ms (max time for lstrb)
 
     doubleSide = model.floppySettings.doubleDensity
-    drives = Array.ofDim[MacDrive](3)//(model.floppySettings.drivesNumber)
+    val oldDrives = drives
+    drives = Array.ofDim[MacDrive](3)
     for i <- drives.indices do
       drives(i) = new MacDrive(driveIndex = i,clockSpeed, doubleSide = doubleSide, present = i < model.floppySettings.drivesNumber,trackChangeListener = diskListener)
+      if i < oldDrives.length && oldDrives(i).getFloppy.isDefined then
+        drives(i).insertFloppy(oldDrives(i).getFloppy.get)
 
     log.info("IWM set model to %s: configuring %d %s drives",model.toString,model.floppySettings.drivesNumber,if doubleSide then "double side" else "single side")
 
@@ -179,10 +172,10 @@ class IWM extends MACComponent:
   def addDiskControllerListener(l:DiskControllerListener): Unit = eventListeners ::= l
   def removeDiskControllerListener(l:DiskControllerListener): Unit = eventListeners = eventListeners.filterNot(_ == l)
 
-  def setInternalDriveSE(set:Boolean): Unit =
+  override def setInternalDriveSE(set:Boolean): Unit =
     internalDriveSE = set
 
-  def setHeadSelLine(set:Boolean): Unit =
+  override def setHeadSelLine(set:Boolean): Unit =
     headsel = set
     diskListener.onHeadSelected(getSelectedDrive.driveIndex,if set then 1 else 0)
     if set then
@@ -193,7 +186,7 @@ class IWM extends MACComponent:
   inline private def getHead: Int =
     if !doubleSide || getSelectedDrive.getFloppySides == 1 || !headsel then 0 else 1
 
-  inline private def getSelectedDrive: MacDrive =
+  protected def getSelectedDrive: MacDrive =
     if externalDrive then
       drives(1)
     else if internalDriveSE then
@@ -218,7 +211,7 @@ class IWM extends MACComponent:
         if !lstrb && ejecting > 0 then
           ejecting = 0 // Disk ejecting: Note that the LSTRB signal must remain active for 750ms for the eject to occur
         if lstrb /*&& enable*/ then
-          writeCommand()
+          sendDiskCommand()
       case 4 =>
         enable = bitSet
         if enable then iwmRegisterSelection |= EN_MASK else iwmRegisterSelection &= ~EN_MASK
@@ -241,7 +234,7 @@ class IWM extends MACComponent:
     *: the Macintosh Plus briefly asserts eject during boot for unknown reasons.
        This does not cause an actual eject on hardware, but re-emphasizes the need to observe the 750ms in an emulator.
    */
-  private def writeCommand(): Unit =
+  private def sendDiskCommand(): Unit =
     val drive = getSelectedDrive
     driveRegisterSelection match
       case 0b0000 /*TRACKUP*/ => drive.setStepDirection(stepUP = true)
@@ -258,7 +251,7 @@ class IWM extends MACComponent:
       case 0b1110 /*EJECT*/ =>
         ejecting = EJECT_LSTRB_ACTIVE_CYCLES
         ejectingDriveIndex = drive.driveIndex
-  end writeCommand
+  end sendDiskCommand
 
   /*
       CA2 CA1 CA0 SEL  STAT35   Function
@@ -463,9 +456,15 @@ class IWM extends MACComponent:
     else
       log.warning("IWM writing to unknown register: %2X",iwmRegisterSelection)
 
+    iwmModeRegisterWritten(mode)
+  end writeIWMRegister
+
+  protected def iwmModeRegisterWritten(mode:Int): Unit = {}
+
   private def ejectDisk(): Unit =
     log.info("Disk %d ejecting ...",ejectingDriveIndex)
     getSelectedDrive.ejectFloppy()
+    diskListener.onFloppyEjected(ejectingDriveIndex)
     diskListener.onFloppyEjected(ejectingDriveIndex)
 
   def insertFloppy(driveIndex:Int,floppy:DiskImage): Unit =
@@ -550,7 +549,7 @@ class IWM extends MACComponent:
         sectorByteCounter = GCR.SECTOR_BYTE_POS_IN_ADDRESS_MARK
 
   // READ / WRITE ACCESS
-  final def read(address:Int): Int =
+  override def read(address:Int): Int =
     log.info("IWM read address %06X",address)
     if (address & 1) == 0 then
       log.warning("Reading IWM from an even address: %06X",address)
@@ -558,7 +557,7 @@ class IWM extends MACComponent:
 
     access(address)
     readIWMRegister
-  final def write(address:Int,value:Int): Unit =
+  override def write(address:Int,value:Int): Unit =
     log.info("IWM write %02X to address %06X",value,address)
     if (address & 1) == 0 then
       log.warning("Writing IWM to an even address: %06X", address)

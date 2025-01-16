@@ -1,6 +1,6 @@
 package ucesoft.mac.storage
 
-import ucesoft.mac.MACComponent
+import ucesoft.mac.{MACComponent, MessageBus}
 
 import scala.compiletime.uninitialized
 
@@ -57,11 +57,14 @@ abstract class Drive(val doubleSide: Boolean,val present: Boolean) extends MACCo
   def getTrack: TrackPos = trackNumber
   def getBitOnHead(head:Int,moveAhead:Boolean): Boolean
   def setBitOnHeadAndMoveAhead(head:Int,bit:Boolean): Unit
+  
+  def isOnIndexHole: Boolean = false
 
   def cycle(): Unit
 
-class MacDrive(val driveIndex:Int,val clockSpeed:Int,override val doubleSide: Boolean,override val present:Boolean,trackChangeListener:IWM.DiskControllerListener) extends Drive(doubleSide,present):
+class MacDrive(val driveIndex:Int,val clockSpeed:Int,override val doubleSide: Boolean,override val present:Boolean,trackChangeListener:DiskController.DiskControllerListener) extends Drive(doubleSide,present):
   override protected val componentName = s"Drive #$driveIndex"
+  private inline val INDEX_HOLE_BITS = 8 * 5
   private final val PWM_VALUE_TO_LEN = Array(
     0,  1, 59,  2, 60, 40, 54,  3,
     61, 32, 49, 41, 55, 19, 35,  4,
@@ -77,6 +80,11 @@ class MacDrive(val driveIndex:Int,val clockSpeed:Int,override val doubleSide: Bo
   private var pwm_dutycycle = 0.0f
   private var stepping = 0
   private var cycles = 0L
+
+  override def ejectFloppy(): Unit =
+    if floppy != null then
+      MessageBus.send(MessageBus.ShuttingdownItem(this,s"Unmounting floppy drive #$driveIndex [${floppy.diskName}] ..."))  
+    super.ejectFloppy()
 
   override protected def reset(): Unit =
     super.reset()
@@ -190,6 +198,9 @@ class MacDrive(val driveIndex:Int,val clockSpeed:Int,override val doubleSide: Bo
     if stepping > 0 then
       stepping -= 1
       if stepping == 0 then stepHeadFinal()
+      
+  override def isOnIndexHole: Boolean =
+    floppy != null && floppy.getTrack(head = 0, trackNumber).getPos < INDEX_HOLE_BITS
 
 
 
