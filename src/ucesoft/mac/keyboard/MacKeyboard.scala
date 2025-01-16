@@ -304,6 +304,8 @@ class MacKeyboard extends MACComponent with KeyListener:
       case None =>
 
   override def keyPressed(e: KeyEvent): Unit =
+    if e.isAltDown then return
+
     if macModel.ordinal >= MacModel.SE.ordinal then
       adbKey(pressed = true,code = e.getExtendedKeyCode)
     else if e.getExtendedKeyCode == VK_CAPS_LOCK then
@@ -327,6 +329,8 @@ class MacKeyboard extends MACComponent with KeyListener:
             queueLock.unlock()
         case None =>
   override def keyReleased(e: KeyEvent): Unit =
+    if e.isAltDown then return
+
     if macModel.ordinal >= MacModel.SE.ordinal then
       adbKey(pressed = false,code = e.getExtendedKeyCode)
     else
