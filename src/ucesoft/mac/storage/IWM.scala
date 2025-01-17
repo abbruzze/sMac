@@ -467,12 +467,15 @@ class IWM extends DiskController:
     diskListener.onFloppyEjected(ejectingDriveIndex)
     diskListener.onFloppyEjected(ejectingDriveIndex)
 
-  def insertFloppy(driveIndex:Int,floppy:DiskImage): Unit =
+  def insertFloppy(driveIndex:Int,floppy:DiskImage): Boolean =
     if driveIndex > drives.length || !drives(driveIndex).present then
       throw new IllegalArgumentException(s"Drive #$driveIndex not present or configured: can't insert a floppy")
-    drives(driveIndex).insertFloppy(floppy)
-    diskListener.onFloppyInserted(driveIndex,floppy)
-    log.info("Inserted floppy %s into drive #%d",floppy.diskName,driveIndex)
+    if drives(driveIndex).insertFloppy(floppy) then
+      diskListener.onFloppyInserted(driveIndex,floppy)
+      log.info("Inserted floppy %s into drive #%d",floppy.diskName,driveIndex)
+      true
+    else
+      false
 
   def updatePWMSample(pwm:Int): Unit =
     getSelectedDrive.updatePWMDutyCycle(pwm)

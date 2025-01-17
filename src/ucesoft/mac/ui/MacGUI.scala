@@ -489,7 +489,8 @@ class MacGUI extends MessageBus.MessageListener:
 
     try
       val floppy = new MacDiskImage(file)
-      mac.iwm.insertFloppy(drive,floppy)
+      if !mac.iwm.insertFloppy(drive,floppy) then
+        JOptionPane.showMessageDialog(frame,s"Drive #$drive is not empty: eject the floppy first","Error while mounting floppy",JOptionPane.ERROR_MESSAGE)
     catch
       case t:Throwable =>
         JOptionPane.showMessageDialog(frame,s"Invalid floppy format: ${t.getMessage}","Error while mounting floppy",JOptionPane.ERROR_MESSAGE)

@@ -35,12 +35,13 @@ abstract class Drive(val doubleSide: Boolean,val present: Boolean) extends MACCo
   def isFloppyIn: Boolean = floppy != null
   def getFloppy: Option[DiskImage] = Option(floppy)
   def getFloppySides: Int = if floppy != null then floppy.getHeadCount else 1 
-  def insertFloppy(newFloppy:DiskImage): Unit =
+  def insertFloppy(newFloppy:DiskImage): Boolean =
     if floppy != null then
-      floppy.eject(flush = flushFloppyOnEject)
+      return false
     floppy = newFloppy
     trackNumber = 0
     headStepDirection = HeadStepDirection.Up
+    true
   def ejectFloppy(): Unit =
     if floppy != null then
       log.info("Ejecting floppy: motor=%s",isMotorOn)
@@ -94,9 +95,11 @@ class MacDrive(val driveIndex:Int,val clockSpeed:Int,override val doubleSide: Bo
     stepping = 0
     cycles = 0
 
-  override def insertFloppy(newFloppy:DiskImage): Unit =
-    super.insertFloppy(newFloppy)
+  override def insertFloppy(newFloppy:DiskImage): Boolean =
+    val ok = super.insertFloppy(newFloppy)
+    if !ok then return false
     trackChangeListener.onTrackChanged(driveIndex,trackNumber)
+    true
 
   private def getTrackRPM: Int =
     if doubleSide then

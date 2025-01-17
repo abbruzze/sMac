@@ -28,4 +28,4 @@ abstract class DiskController extends MACComponent:
   
   def addDiskControllerListener(dcl:DiskController.DiskControllerListener): Unit
 
-  def insertFloppy(driveIndex:Int,floppy:DiskImage): Unit
+  def insertFloppy(driveIndex:Int,floppy:DiskImage): Boolean
