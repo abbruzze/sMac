@@ -41,7 +41,7 @@ object MAC extends MACComponent with Clockable with VideoSignalListener with M68
   final val scc = new Z8530(sccIRQLow)
   final val iwm = new IWM
   final val video = new MacVideo
-  final val mouse = new QuadMouse(zoomFactor = 2)
+  final val mouse = new QuadMouse(zoomFactorX = 2,zoomFactorY = 2)
   final val keyboard = new MacKeyboard
   final val audio = new AudioDevice((370 * 60.15).toInt) // 22.25 Khz
   final val via = new MacVIA(viaIRQLow,audio,video,mouse,rtc,iwm,keyboard,adb,setOverlay)
@@ -57,6 +57,11 @@ object MAC extends MACComponent with Clockable with VideoSignalListener with M68
   private var viaIRQ = false
   private var scsiIRQ = false
 
+  private var pendingSwitchIRQ = false
+
+  private def pushSwitch(): Unit =
+    pendingSwitchIRQ = true
+
   private def sccIRQLow(low:Boolean): Unit =
     if low then m68kIRQLevel |= 2 else m68kIRQLevel &= ~2
     checkIRQ()
@@ -70,7 +75,7 @@ object MAC extends MACComponent with Clockable with VideoSignalListener with M68
       if viaIRQ || scsiIRQ then m68kIRQLevel |= 1 else m68kIRQLevel &= ~1
       checkIRQ()
   private def checkIRQ(): Unit =
-    m68k.interrupt(if m68kIRQLevel == 3 then 2 else m68kIRQLevel)
+    m68k.interrupt(if (m68kIRQLevel & 4) != 0 then 4 else if m68kIRQLevel == 3 then 2 else m68kIRQLevel)
 
   private def setOverlay(overlayOn:Boolean): Unit = mmu.setOverlay(overlayOn)
 
@@ -162,6 +167,15 @@ object MAC extends MACComponent with Clockable with VideoSignalListener with M68
 
   override final def clock(cycles: Long): Unit =
     m68k.execute()
+    if pendingSwitchIRQ then
+      pendingSwitchIRQ = false
+      m68kIRQLevel |= 4
+      m68k.setInterruptAckListener(_ => {
+        m68kIRQLevel &= ~4
+        m68k.setInterruptAckListener(null)
+        checkIRQ()
+      })
+      checkIRQ()
   end clock
 
   override def onVBlank(on: Boolean): Unit = via.CA1In(!on)
@@ -190,7 +204,7 @@ object MAC extends MACComponent with Clockable with VideoSignalListener with M68
         println(err)
         sys.exit(1)
 
-    model.setTotalRamInK(model.ramSizesInK(2))
+    model.setTotalRamInK(model.ramSizesInK(model.ramSizesInK.length - 1))
 
     FlatLightLaf.setup()
     JFrame.setDefaultLookAndFeelDecorated(false)
@@ -224,8 +238,6 @@ object MAC extends MACComponent with Clockable with VideoSignalListener with M68
     video.setRAM(mmu.getRAM)
     video.setDisplay(display)
 
-    //keyboard.setModel(MacKeyboard.KeyboardModel.M0110A)
-
     debugger.setROM(mmu.getROM)
 
     masterClock.setErrorHandler(t => {
@@ -236,8 +248,12 @@ object MAC extends MACComponent with Clockable with VideoSignalListener with M68
     val southPanel = new JPanel(new FlowLayout(FlowLayout.LEFT))
     val warp = new JToggleButton("Warp")
     warp.setFocusable(false)
+    val switch = new JButton("Switch")
+    switch.setFocusable(false)
+    switch.addActionListener(_ => pushSwitch())
 
     southPanel.add(warp)
+    southPanel.add(switch)
     val storagePanel = new StoragePanel
     southPanel.add(storagePanel)
     storagePanel.setDiskette(model.floppySettings.drivesNumber)
@@ -251,24 +267,27 @@ object MAC extends MACComponent with Clockable with VideoSignalListener with M68
     frame.getContentPane.add("South",southPanel)
 
     // floppy
-//    val system = new MacDiskImage("""G:\My Drive\Emulatori\Macintosh\System Tools Plus 3.img""")
+//    val system = new MacDiskImage("""G:\My Drive\Emulatori\Macintosh\software\Macintosh Guided Tour.img""")
 //    iwm.insertFloppy(0, system)
 //    iwm.insertFloppy(1, new MacDiskImage("""C:\Users\ealeame\OneDrive - Ericsson\Desktop\Lemmings demo.img"""))
 
     // scsi
-    val s1 = new SCSIHardDrive(2,"""C:\Users\ealeame\OneDrive - Ericsson\Desktop\sMac\HD20_512-MacPlus.hda""")//"""C:\temp\PCE\hd1.img""") //"""C:\Users\ealeame\OneDrive - Ericsson\Desktop\hdd""")
-    //val s2 = new SCSIHardDrive(4,"""C:\Users\ealeame\Downloads\boot.vhd""") //"""C:\Users\ealeame\Documents\GitHub\snow\target\release\hdd1.img""")
-    val s3 = new SCSIHardDrive(3,"""C:\Users\ealeame\OneDrive - Ericsson\Desktop\sMac\755_2GB_drive.dsk""")
+    val s1 = new SCSIHardDrive(2,"""C:\Users\ealeame\OneDrive - Ericsson\Desktop\sMac\Saved HD.hda""")//"""C:\temp\PCE\hd1.img""") //"""C:\Users\ealeame\OneDrive - Ericsson\Desktop\hdd""")
+    val s2 = new SCSIHardDrive(1,"""C:\Users\ealeame\OneDrive - Ericsson\Desktop\sMac\HD20_512-MacPlus.hda""") //"""C:\Users\ealeame\Documents\GitHub\snow\target\release\hdd1.img""")
+    val s3 = new SCSIHardDrive(4,"""C:\Users\ealeame\OneDrive - Ericsson\Desktop\sMac\755_2GB_drive.dsk""") //
+    val s4 = new SCSIHardDrive(3,"""C:\Users\ealeame\OneDrive - Ericsson\Desktop\CD Fun House.iso""")
     scsi.setTarget(s1)
-    //scsi.setTarget(s2)
+    scsi.setTarget(s2)
     scsi.setTarget(s3)
+    scsi.setTarget(s4)
     scsi.setSCSIListener(storagePanel)
     storagePanel.setSCSI(s1)
-    //storagePanel.setSCSI(s2)
+    storagePanel.setSCSI(s2)
     storagePanel.setSCSI(s3)
+    storagePanel.setSCSI(s4)
 
     // DND
-    frame.setTransferHandler(new DNDHandler((file,copy) => {
+    display.setTransferHandler(new DNDHandler((file,copy) => {
       val index = if copy then 1 else 0
       println(s"Dragged[$index] $file")
       iwm.insertFloppy(index, new MacDiskImage(file.toString))

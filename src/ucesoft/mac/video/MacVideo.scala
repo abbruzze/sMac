@@ -25,7 +25,7 @@ class MacVideo extends MACComponent:
   inline private val WHITE = 0xFF_FFFFFF
   private final val PALETTE = Array(WHITE,BLACK)
 
-  private var ram : Array[Int] = Array()
+  private var ram : Array[Byte] = Array()
   private var videoBufferOffset = macModel.videoSettings.videoBufferAddress
   private var videoBufferByteCounter = 0
   private var videoPixels : Array[Int] = Array()
@@ -72,7 +72,7 @@ class MacVideo extends MACComponent:
       readCycle = 8
       readLong = true
       shiftMask = 0x10000_0000L
-  def setRAM(ram:Array[Int]): Unit =
+  def setRAM(ram:Array[Byte]): Unit =
     this.ram = ram
   def selectVideoBuffer(alternate:Boolean): Unit =
     if alternate then
@@ -110,10 +110,10 @@ class MacVideo extends MACComponent:
   private def readData(): Unit =
     val ramOffset = (videoBufferOffset + videoBufferByteCounter) & (ram.length - 1)
     if readLong then
-      pixelShiftRegister = ram(ramOffset) << 24 | ram(ramOffset + 1) << 16 | ram(ramOffset + 2) << 8 | ram(ramOffset + 3)
+      pixelShiftRegister = (ram(ramOffset) & 0xFF) << 24 | (ram(ramOffset + 1) & 0xFF) << 16 | (ram(ramOffset + 2) & 0xFF) << 8 | (ram(ramOffset + 3) & 0xFF)
       videoBufferByteCounter += 4
     else
-      pixelShiftRegister = ram(ramOffset) << 8 | ram(ramOffset + 1)
+      pixelShiftRegister = (ram(ramOffset) & 0xFF) << 8 | (ram(ramOffset + 1) & 0xFF)
       videoBufferByteCounter += 2
 
   inline private def acquireBUS(acquire:Boolean): Unit =

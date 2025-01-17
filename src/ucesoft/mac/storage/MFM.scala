@@ -58,6 +58,8 @@ object MFM:
   private inline val DATA_MARK_NEXT_BYTE    = 0xFB
   private inline val CRC_DATA_MARK          = 58005 // 58005 crc of A1 x 3, FB x 1
 
+  private inline val MFM_TRACK_BITS = 200_000
+
   private final val crcCache = {
     val cache = Array.ofDim[Int](256)
     for i <- 0 to 255 do
@@ -121,7 +123,15 @@ object MFM:
     val _b = b & 0xFF
     (crcCache(_crc >> 8 ^ _b) ^ _crc << 8) & 0xFFFF
 
-  def encodeTrack(trackId:TrackPos,side:Int,diskFormat:DiskImage.DiskEncoding,data:Array[Byte]): Track =
+  def encodeMFMTracks(tracks: Array[Array[Track]],diskFormat:DiskImage.DiskEncoding, data: Array[Byte]): Unit =
+    val emptyDisk = data == null
+
+    for t <- 0 to 79 do
+      for side <- 0 to 1 do
+        tracks(side)(t) = if emptyDisk then new Track(MFM_TRACK_BITS) else encodeTrack(t,side,diskFormat,data)
+  end encodeMFMTracks
+
+  private def encodeTrack(trackId:TrackPos,side:Int,diskFormat:DiskImage.DiskEncoding,data:Array[Byte]): Track =
     val track = new Track()
     // 1. Gap to index mark (80)
     for _ <- 1 to 80 do track.setInt(byte2MFM(0x4E),bits = 16)

@@ -8,7 +8,7 @@ import java.security.MessageDigest
  * @author Alessandro Abbruzzetti
  *         Created on 29/11/2024 19:12  
  */
-case class ROM(file:String,rom:Array[Int],hash:String,model:MacModel)
+case class ROM(file:String,rom:Array[Byte],hash:String,model:MacModel)
 
 object ROM:
   def loadROM(file:String): Either[String,ROM] =
@@ -19,7 +19,7 @@ object ROM:
       val hash = md.digest().map("%02X".format(_)).mkString
       MacModel.values.find(_.md5.contains(hash)) match
         case Some(model) =>
-          Right(ROM(file,rom.map(_.toInt & 0xFF),hash,model))
+          Right(ROM(file,rom,hash,model))
         case None =>
           Left(s"ROM's md5 '$hash' not recognized")
     catch

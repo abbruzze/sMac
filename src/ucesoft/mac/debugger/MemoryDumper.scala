@@ -5,18 +5,11 @@ import java.awt.{BorderLayout, Component, FlowLayout}
 import javax.swing.table.{AbstractTableModel, DefaultTableCellRenderer}
 import javax.swing.*
 
-object MemoryDumper:
-  def main(args:Array[String]): Unit =
-    val f = new JFrame()
-    val mem = Array.ofDim[Int](128)
-
-    val dumper = new MemoryDumper(mem,0xC0_0000,"Memory dumper",null,() => println("Window closed"))
-    dumper.dialog.setVisible(true)
 /**
  * @author Alessandro Abbruzzetti
  *         Created on 22/10/2023 18:38  
  */
-class MemoryDumper(mem:Array[Int],
+class MemoryDumper(mem:Array[Byte],
                    startAddress:Int,
                    override val title:String,
                    override val frame:JFrame,
@@ -74,7 +67,7 @@ class MemoryDumper(mem:Array[Int],
         val byte = Integer.parseInt(aValue.toString,16)
         if byte < 0 || byte > maxValue then
           throw new IllegalArgumentException()
-        mem(address) = byte
+        mem(address) = byte.toByte
         fireTableRowsUpdated(rowIndex,rowIndex)
       catch
         case _:NumberFormatException =>
@@ -161,9 +154,9 @@ class MemoryDumper(mem:Array[Int],
       val text = searchHexTF.getText
       try
         val arrayToSearch = if text.startsWith("\"") && text.endsWith("\"") then
-          text.substring(1,text.length - 1).getBytes().map(_.toInt & 0xFF)
+          text.substring(1,text.length - 1).getBytes()
         else
-          text.sliding(2,2).map(h => Integer.parseInt(h,16)).toArray
+          text.sliding(2,2).map(h => Integer.parseInt(h,16).toByte).toArray
         ByteArraySearch.findSubArrayIndex(mem, arrayToSearch) match
           case None =>
           case Some(address) =>

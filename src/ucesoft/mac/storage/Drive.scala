@@ -1,6 +1,7 @@
 package ucesoft.mac.storage
 
-import ucesoft.mac.{MACComponent, MessageBus}
+import ucesoft.mac.storage.DiskImage.DiskEncoding.MFM720K
+import ucesoft.mac.{MACComponent, MacModel, MessageBus}
 
 import scala.compiletime.uninitialized
 
@@ -34,7 +35,7 @@ abstract class Drive(val doubleSide: Boolean,val present: Boolean) extends MACCo
   def setFlushFloppyOnEject(flush:Boolean): Unit = flushFloppyOnEject = flush
   def isFloppyIn: Boolean = floppy != null
   def getFloppy: Option[DiskImage] = Option(floppy)
-  def getFloppySides: Int = if floppy != null then floppy.getHeadCount else 1 
+  def getFloppySides: Int = if floppy != null then floppy.getHeadCount else 1
   def insertFloppy(newFloppy:DiskImage): Boolean =
     if floppy != null then
       return false

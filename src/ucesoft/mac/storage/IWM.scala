@@ -131,6 +131,7 @@ class IWM extends DiskController:
     writeShiftRegister = 0
     writeShiftRegisterBits = 0
     lastModeWasWriting = false
+    getAndResetByteAccessed
 
   override protected def setModel(model: MacModel): Unit =
     super.setModel(model)
@@ -143,6 +144,7 @@ class IWM extends DiskController:
     drives = Array.ofDim[MacDrive](3)
     for i <- drives.indices do
       drives(i) = new MacDrive(driveIndex = i,clockSpeed, doubleSide = doubleSide, present = i < model.floppySettings.drivesNumber,trackChangeListener = diskListener)
+      drives(i).setComponentModel(model)
       if i < oldDrives.length && oldDrives(i).getFloppy.isDefined then
         drives(i).insertFloppy(oldDrives(i).getFloppy.get)
 
@@ -169,8 +171,8 @@ class IWM extends DiskController:
 
     common ::: drivesProp.flatten
 
-  def addDiskControllerListener(l:DiskControllerListener): Unit = eventListeners ::= l
-  def removeDiskControllerListener(l:DiskControllerListener): Unit = eventListeners = eventListeners.filterNot(_ == l)
+  override def addDiskControllerListener(l:DiskControllerListener): Unit = eventListeners ::= l
+  override def removeDiskControllerListener(l:DiskControllerListener): Unit = eventListeners = eventListeners.filterNot(_ == l)
 
   override def setInternalDriveSE(set:Boolean): Unit =
     internalDriveSE = set
@@ -353,6 +355,7 @@ class IWM extends DiskController:
       0xFF
     else if iwmRegisterSelection == EN_MASK then // Data register (reading track)
       val dr = dataRegister & 0xFF
+      incProbeBytes()
       dataRegister = 0 // reading data register clear it
       dr
     else if (iwmRegisterSelection & (Q6_MASK | Q7_MASK)) == Q6_MASK then // Status register
@@ -411,6 +414,7 @@ class IWM extends DiskController:
       if writeDataRegisterFilled then
         log.warning("IWM write data register written when was already filled")
       writeDataRegister = value & 0xFF
+      incProbeBytes()
       //println("Writing %02X".format(writeDataRegister))
       writeDataRegisterFilled = true
     else if iwmRegisterSelection == (Q6_MASK | Q7_MASK) then // Mode register
@@ -467,7 +471,7 @@ class IWM extends DiskController:
     diskListener.onFloppyEjected(ejectingDriveIndex)
     diskListener.onFloppyEjected(ejectingDriveIndex)
 
-  def insertFloppy(driveIndex:Int,floppy:DiskImage): Boolean =
+  override def insertFloppy(driveIndex:Int,floppy:DiskImage): Boolean =
     if driveIndex > drives.length || !drives(driveIndex).present then
       throw new IllegalArgumentException(s"Drive #$driveIndex not present or configured: can't insert a floppy")
     if drives(driveIndex).insertFloppy(floppy) then
@@ -477,12 +481,12 @@ class IWM extends DiskController:
     else
       false
 
-  def updatePWMSample(pwm:Int): Unit =
+  override def updatePWMSample(pwm:Int): Unit =
     getSelectedDrive.updatePWMDutyCycle(pwm)
 
   inline private def isWriting: Boolean = writeDataRegisterFilled || writeShiftRegisterBits > 0
 
-  def cycle(): Unit =
+  override def cycle(): Unit =
     val drive = getSelectedDrive
     // motor off
     if motorIsTurningOff > 0 then

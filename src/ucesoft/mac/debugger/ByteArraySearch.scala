@@ -6,7 +6,7 @@ package ucesoft.mac.debugger
  *         Created on 16/01/2025 15:14  
  */
 object ByteArraySearch {
-  def findSubArrayIndex(arr: Array[Int], subArr: Array[Int]): Option[Int] = {
+  def findSubArrayIndex(arr: Array[Byte], subArr: Array[Byte]): Option[Int] = {
     if (subArr.isEmpty) return Some(0)
     if (arr.length < subArr.length) return None
 
@@ -29,7 +29,7 @@ object ByteArraySearch {
     None
   }
 
-  private def buildFailureTable(pattern: Array[Int]): Array[Int] = {
+  private def buildFailureTable(pattern: Array[Byte]): Array[Int] = {
     val failure = Array.fill(pattern.length)(0)
     var j = 0
 

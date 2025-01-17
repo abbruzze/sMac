@@ -1,6 +1,6 @@
 package ucesoft.mac.scsi
 
-import ucesoft.mac.{MACComponent, MacModel, MessageBus}
+import ucesoft.mac.{ByteTransferProbe, MACComponent, MacModel, MessageBus}
 
 import javax.swing.ImageIcon
 import scala.collection.mutable.ListBuffer
@@ -63,7 +63,8 @@ import scala.compiletime.uninitialized
  *         $580060		Input Data Register
  *         $580070		Reset Parity/Interrupt
  */
-class NCR5380 extends MACComponent:
+class NCR5380 extends MACComponent with ByteTransferProbe:
+  override val probeName = "SCSI controller"
   protected override val componentName = "SCSI Controller"
   override protected val icon = new ImageIcon(getClass.getResource("/resources/trace/scsi.png"))
 
@@ -170,9 +171,17 @@ class NCR5380 extends MACComponent:
   // irq
   private var irqHandler: Boolean => Unit = uninitialized
 
+  // probe
+  private var probeBytes = 0
+
   inline private def isScsiSet(bits:Int): Boolean = (scsiLines & bits) == bits
   inline private def setScsi(bits:Int): Unit = scsiLines |= bits
   inline private def clearScsi(bits:Int): Unit = scsiLines &= ~bits
+
+  override def getAndResetByteAccessed: Int =
+    val pb = probeBytes
+    probeBytes = 0
+    pb
 
   override def onMessage(msg: MessageBus.Message): Unit =
     msg match
@@ -198,6 +207,7 @@ class NCR5380 extends MACComponent:
     targetCommandReg = 0
     initiatorCommandReg = 0
     scsiData = 0
+    probeBytes = 0
 
   def setIRQHandler(handler:Boolean => Unit): Unit =
     irqHandler = handler
@@ -252,6 +262,7 @@ class NCR5380 extends MACComponent:
     reg match
       case 0b000 | 0b110 => // Current SCSI Data
         //if phase == Status then println(s"SCSI reading STATUS $scsiData") else println(s"SCSI reading data $scsiData")
+        probeBytes += 1
         if phase == DataIn && dmaMode then
           if nextDataIn(assertReq = false) then dmaReq = true
         scsiData
@@ -337,6 +348,7 @@ class NCR5380 extends MACComponent:
     reg match
       case 0b000 => // Output Data
         scsiData = value & 0xFF
+        probeBytes += 1
         if dmaMode && phase == DataOut then
           nextDataOut(assertReq = false,value.toByte)
           dmaReq = true

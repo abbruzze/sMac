@@ -555,7 +555,7 @@ class Debugger(m68k:M68000,
 
   // ==================================================================================================
   
-  def setRAM(m68kRAM:Array[Int]): Unit =
+  def setRAM(m68kRAM:Array[Byte]): Unit =
     m68KramDialog = new MemoryDumper(m68kRAM, 0x000000, "68K RAM", frame, () => m68kramMemoryDumpItem.setSelected(false), setPreferredScrollableViewportSize = false, showASCII = true).dialog
 
   def setMessageBoard(mb:MessageBoardListener): Unit =
@@ -854,7 +854,7 @@ class Debugger(m68k:M68000,
       m68kDebugger.enableCommentedROMPanel(enabled)
       false
 
-  def setROM(rom:Array[Int]): Unit =
+  def setROM(rom:Array[Byte]): Unit =
     romDialog = new MemoryDumper(rom,0,"ROM",frame,() => romDumpItem.setSelected(false),canUpdate = false,setPreferredScrollableViewportSize = false, showASCII = true).dialog
 
   private def jumpToAddress(): Unit =

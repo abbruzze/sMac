@@ -1,8 +1,8 @@
 package ucesoft.mac.storage
 
 import ucesoft.mac.MessageBus
+import ucesoft.mac.storage.DiskImage.DiskEncoding
 import ucesoft.mac.storage.DiskImage.DiskEncoding.*
-import ucesoft.mac.storage.DiskImage.{BITS_PER_TRACK_GROUP, DiskEncoding}
 
 import java.io.{File, RandomAccessFile}
 /**
@@ -23,6 +23,7 @@ class MacDiskImage(val fileName:String,private val emptyDisk:Boolean = false) ex
 
   def getDiskFileName: Option[String] = Option(fileName)
 
+  override def getEncoding: DiskEncoding = encoding
   override def getFormat: ImageFormat = imageFormat
   override def isModified: Boolean = tracks.exists(_.exists(_.isModified))
   override def diskName: String = name
@@ -54,12 +55,15 @@ class MacDiskImage(val fileName:String,private val emptyDisk:Boolean = false) ex
     if file.length() == GCR400K.rawByteSize || file.length() == GCR800K.rawByteSize then
       val data = java.nio.file.Files.readAllBytes(file.toPath)
       name = file.getName
-      if file.length() == GCR400K.rawByteSize then
-        encoding = GCR400K
-      else
-        encoding = GCR800K
-
+      encoding = if file.length() == GCR400K.rawByteSize then GCR400K else GCR800K
       GCREncoder.encodeGCRTracks(tracks,encoding,data, null)
+      imageFormat = ImageFormat.RAW
+      true
+    else if file.length() == MFM720K.rawByteSize || file.length() == MFM1440K.rawByteSize then
+      val data = java.nio.file.Files.readAllBytes(file.toPath)
+      name = file.getName
+      encoding = if file.length() == MFM720K.rawByteSize then MFM720K else MFM1440K
+      MFM.encodeMFMTracks(tracks,encoding,data)
       imageFormat = ImageFormat.RAW
       true
     else
@@ -153,3 +157,6 @@ class MacDiskImage(val fileName:String,private val emptyDisk:Boolean = false) ex
             Some("To be done...")
           case _ =>
             None
+      case MFM720K | MFM1440K =>
+        // TODO
+        Some("To be done...")

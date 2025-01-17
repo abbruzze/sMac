@@ -49,6 +49,7 @@ class MacGUI extends MessageBus.MessageListener:
   private val warpItem = new JCheckBoxMenuItem("Warp mode")
   private val mouseCapItem = new JCheckBoxMenuItem("Mouse capture")
   private val autoWarpItem = new JCheckBoxMenuItem("Auto-warp")
+  private val perfMonitorItem = new JCheckBoxMenuItem("Performance monitor ...")
 
   private val mac = new Motherboard
   private val debugger = new Debugger(m68k = mac.m68k, video = mac.video, () => debugMenuItem.setSelected(false), mac.video,mac.via,mac.rtc,mac.iwm,mac.scc,mac.audio,mac.keyboard,mac.scsi,mac.adb)
@@ -71,6 +72,8 @@ class MacGUI extends MessageBus.MessageListener:
 
   private val storagePanel = new StoragePanel
 
+  private var performanceMonitor : PerformanceMonitor = uninitialized
+
   override def onMessage(msg: MessageBus.Message): Unit =
     msg match
       case MessageBus.FloppyEjected(_,diskName,Some(error)) if !isShuttingDown =>
@@ -80,7 +83,14 @@ class MacGUI extends MessageBus.MessageListener:
           warpMode(isOn)
       case _ =>
 
-  private def reset(hard:Boolean): Unit = ???
+  private def reset(hard:Boolean): Unit =
+    pause(on = true)
+    if hard then
+      mac.hardResetComponent()
+    else
+      mac.resetComponent()
+
+    pause(on = false)
 
   private def errorHandler(t: Throwable): Unit =
     t.printStackTrace()
@@ -274,7 +284,13 @@ class MacGUI extends MessageBus.MessageListener:
     for f <- 0 until model.floppySettings.drivesNumber do
       if floppyPaths(f) != null then
         try
-          mac.iwm.insertFloppy(f,new MacDiskImage(floppyPaths(f)))
+          val image = new MacDiskImage(floppyPaths(f))
+          if !model.acceptFloppy(image.getEncoding) then
+            anyBootingError = true
+            println(s"Cannot mount floppy drive #$f with image ${floppyPaths(f)}: not compatible")
+            log.error("Cannot mount floppy drive #%d with image %s: not compatible",f,floppyPaths(f))
+          else
+            mac.iwm.insertFloppy(f,image)
         catch
           case t:Throwable =>
             anyBootingError = true
@@ -360,7 +376,6 @@ class MacGUI extends MessageBus.MessageListener:
             items.append(s"\n$item")
           case MessageBus.FloppyEjected(_, diskName, Some(error)) =>
             closeButton.setEnabled(true)
-            frame.setVisible(false)
             items.append(s"Error while flushing floppy '$diskName': $error")
           case _ =>
         }
@@ -452,6 +467,9 @@ class MacGUI extends MessageBus.MessageListener:
     toolsMenu.add(fullScreenItem)
     fullScreenItem.setAccelerator(KeyStroke.getKeyStroke(java.awt.event.KeyEvent.VK_ENTER, java.awt.event.InputEvent.ALT_DOWN_MASK))
     fullScreenItem.addActionListener(_ => enableFullScreenMode(true))
+
+    toolsMenu.add(perfMonitorItem)
+    perfMonitorItem.addActionListener(_ => showPerformanceMonitor(perfMonitorItem.isSelected))
   end buildToolsMenu
 
   private def buildHelpMenu(helpMenu:JMenu): Unit =
@@ -459,6 +477,15 @@ class MacGUI extends MessageBus.MessageListener:
     helpMenu.add(aboutItem)
     aboutItem.addActionListener(_ => AboutPanel.showAboutDialog(frame))
   // ==========================================
+  private def showPerformanceMonitor(show:Boolean): Unit =
+    if show then
+      performanceMonitor = new PerformanceMonitor(frame,mac.m68k,mac.masterClock,Array(mac.iwm,mac.scsi),() => perfMonitorItem.setSelected(false))
+      performanceMonitor.dialog.setVisible(true)
+    else
+      performanceMonitor.shutdown()
+      performanceMonitor.dialog.dispose()
+      performanceMonitor = null
+  end showPerformanceMonitor
   private def zoomFactorChanged(dim:Dimension): Unit =
     val zx = dim.width / model.videoSettings.horizontalPixels
     val zy = dim.height / model.videoSettings.verticalLines
@@ -489,7 +516,9 @@ class MacGUI extends MessageBus.MessageListener:
 
     try
       val floppy = new MacDiskImage(file)
-      if !mac.iwm.insertFloppy(drive,floppy) then
+      if !model.acceptFloppy(floppy.getEncoding) then
+        JOptionPane.showMessageDialog(frame,s"Floppy '${floppy.diskName}' cannot be mounted on drive #$drive","Error while mounting floppy",JOptionPane.ERROR_MESSAGE)
+      else if !mac.iwm.insertFloppy(drive,floppy) then
         JOptionPane.showMessageDialog(frame,s"Drive #$drive is not empty: eject the floppy first","Error while mounting floppy",JOptionPane.ERROR_MESSAGE)
     catch
       case t:Throwable =>

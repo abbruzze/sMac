@@ -1,5 +1,7 @@
 package ucesoft.mac.storage
 
+import ucesoft.mac.storage.DiskImage.DiskEncoding
+
 type TrackPos = Int
 
 object DiskImage:
@@ -47,3 +49,4 @@ trait DiskImage:
   def isModified: Boolean
   def flushChangesOnHostDisk(): Option[String]
   def getFormat: DiskImage.ImageFormat
+  def getEncoding: DiskEncoding

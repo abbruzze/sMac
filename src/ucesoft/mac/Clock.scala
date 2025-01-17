@@ -55,6 +55,13 @@ class Clock (val name: String,private var clocksPerSecond: Int,val autoClockIncr
   override def reset(): Unit =
     clockCycles = 0
     events = null
+    lastCorrectionTime = 0
+    lastCorrectionCycles = 0
+    nextPerformanceMeasurementTime = 0
+    skipThrottle = false
+    lastPerformance = 0
+    throttleStartedAt = 0
+    throttleCycleCount = 0
     
   final def addCycles(cycles:Int): Unit =
     clockCycles += cycles

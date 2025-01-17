@@ -21,23 +21,23 @@ class MMU(val scc:Z8530,
           val ncr5380:NCR5380) extends MACComponent with Memory:
   override protected val componentName = "MMU"
 
-  private var ram : Array[Int] = Array()
+  private var ram : Array[Byte] = Array()
   private var ramMask = 0
-  private var rom : Array[Int] = Array()
+  private var rom : Array[Byte] = Array()
   private var romMask = 0
   private var overlay = true
   private var scsi = false
   
   setModel(macModel)
   
-  def getRAM: Array[Int] = ram
-  def getROM : Array[Int] = rom
+  def getRAM: Array[Byte] = ram
+  def getROM : Array[Byte] = rom
 
   def setOverlay(on:Boolean): Unit =
     overlay = on
     log.info("MMU set overlay %s",overlay)
 
-  def setROM(rom:Array[Int]): Unit =
+  def setROM(rom:Array[Byte]): Unit =
     this.rom = rom
     romMask = rom.length - 1
 
@@ -47,7 +47,7 @@ class MMU(val scc:Z8530,
 
   override protected def hardReset(): Unit = 
     super.hardReset()
-    util.Arrays.fill(ram, 0)
+    util.Arrays.fill(ram, 0.toByte)
 
   override protected def setModel(model:MacModel): Unit =
     super.setModel(model)
@@ -56,8 +56,8 @@ class MMU(val scc:Z8530,
     scsi = model.scsi
     log.info("MMU configured %dK of ram for model %s, scsi = %b",model.totalRAMInBytes / 1024,model,scsi)
 
-  private def configureRAM(): Array[Int] =
-    Array.ofDim[Int](macModel.totalRAMInBytes)
+  private def configureRAM(): Array[Byte] =
+    Array.ofDim[Byte](macModel.totalRAMInBytes)
 
   inline private def get4MBlock(address:Int): Int = (address >> 22) & 3
   
@@ -243,28 +243,28 @@ class MMU(val scc:Z8530,
   private def phaseRead(): Int = 0xFF // TODO
   private def adjustPhase(): Unit = {/*TODO*/}
 
-  inline private def readFrom(mem:Array[Int],address:Int,mask:Int,size:Size): Int =
+  inline private def readFrom(mem:Array[Byte],address:Int,mask:Int,size:Size): Int =
     import Size.*
     val adr = address & mask
     size match
       case Byte =>
-        mem(adr) & 0xFF
+        mem(adr).toInt & 0xFF
       case Word =>
-        (mem(adr) << 8 | mem(adr + 1)) & 0xFFFF
+        (mem(adr) & 0xFF) << 8 | (mem(adr + 1) & 0xFF)
       case Long =>
-        mem(adr) << 24 | mem(adr + 1) << 16 | mem(adr + 2) << 8 | mem(adr + 3)
+        (mem(adr) & 0xFF) << 24 | (mem(adr + 1) & 0xFF) << 16 | (mem(adr + 2) & 0xFF) << 8 | (mem(adr + 3) & 0xFF)
 
-  inline private def writeTo(mem:Array[Int],address:Int,value:Int,mask:Int,size:Size): Unit =
+  inline private def writeTo(mem:Array[Byte],address:Int,value:Int,mask:Int,size:Size): Unit =
     import Size.*
     val adr = address & mask
     size match
       case Byte =>
-        mem(adr) = value & 0xFF
+        mem(adr) = (value & 0xFF).toByte
       case Word =>
-        mem(adr) = (value >> 8) & 0xFF
-        mem(adr + 1) = value & 0xFF
+        mem(adr) = ((value >> 8) & 0xFF).toByte
+        mem(adr + 1) = (value & 0xFF).toByte
       case Long =>
-        mem(adr) = value >>> 24
-        mem(adr + 1) = (value >> 16) & 0xFF
-        mem(adr + 2) = (value >> 8) & 0xFF
-        mem(adr + 3) = value & 0xFF
+        mem(adr) = (value >>> 24).toByte
+        mem(adr + 1) = ((value >> 16) & 0xFF).toByte
+        mem(adr + 2) = ((value >> 8) & 0xFF).toByte
+        mem(adr + 3) = (value & 0xFF).toByte

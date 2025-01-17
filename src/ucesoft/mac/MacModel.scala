@@ -1,5 +1,7 @@
 package ucesoft.mac
 import ucesoft.mac.cpu.m68k.Size
+import ucesoft.mac.storage.DiskImage.DiskEncoding
+import ucesoft.mac.storage.DiskImage.DiskEncoding.{GCR400K, GCR800K}
 /**
  * @author Alessandro Abbruzzetti
  *         Created on 13/11/2024 14:54  
@@ -14,6 +16,12 @@ enum MacModel(val clockRateMhz:Int,
               val scsi:Boolean,
               val floppySettings:FloppySettings):
   private var ramInBytes = ramSizesInK(0)
+  
+  def acceptFloppy(diskEncoding: DiskEncoding): Boolean =
+    this match
+      case MAC128K => diskEncoding == GCR400K
+      case PLUS | SE => diskEncoding == GCR400K || diskEncoding == GCR800K
+      case _ => true
 
   def totalRAMInBytes: Int = ramInBytes
   def setTotalRamInK(ramInK:Int): Unit =
