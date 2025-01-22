@@ -187,6 +187,7 @@ class MacGUI extends MessageBus.MessageListener:
       autoWarp = aw
       autoWarpItem.setSelected(aw)
     }
+    pref.add(SKIP_MEM_TEST, "skip initial memory test", false) { skip => }
 
     if pref.checkForHelp(args) then
       println(s"sMac emulator ver. ${Version.VERSION} (${Version.BUILD_DATE})")
@@ -310,16 +311,19 @@ class MacGUI extends MessageBus.MessageListener:
     debugger.setRAM(mac.mmu.getRAM)
     debugger.setROM(mac.mmu.getROM)
 
-    log.setLevel(java.util.logging.Level.SEVERE)
-
     mac.registerOnBus()
 
     // patch ram for skipping memory test
     // if skipping memory test is needed
-    // TODO add pref variable to keep memory test
-    model.skipMemoryTestAddress.foreach { case (address, value, size) =>
-      mac.mmu.patchRAM(address, value, size)
-    }
+    pref.get[Boolean](Preferences.SKIP_MEM_TEST).foreach(p => {
+      if p.value then
+        log.info("Skipping memory test ...")
+        model.skipMemoryTestAddress.foreach { case (address, value, size) =>
+          mac.mmu.patchRAM(address, value, size)
+        }
+    })
+
+    log.setLevel(java.util.logging.Level.SEVERE)
 
     MessageBus.send(MessageBus.Configuration(this,conf))
 
@@ -429,6 +433,15 @@ class MacGUI extends MessageBus.MessageListener:
     warpItem.addActionListener(_ => warpMode(warpItem.isSelected))
     fileMenu.add(autoWarpItem)
     autoWarpItem.addActionListener(_ => autoWarp = autoWarpItem.isSelected)
+
+    val pauseItem = new JCheckBoxMenuItem("Pause")
+    pauseItem.setAccelerator(KeyStroke.getKeyStroke(java.awt.event.KeyEvent.VK_P,java.awt.event.InputEvent.ALT_DOWN_MASK))
+    fileMenu.add(pauseItem)
+    pauseItem.addActionListener(_ => {
+      pause(on = pauseItem.isSelected)
+      if pauseItem.isSelected then
+        display.setPaused()
+    })
 
     val exitItem = new JMenuItem("Exit")
     exitItem.setAccelerator(KeyStroke.getKeyStroke(java.awt.event.KeyEvent.VK_X,java.awt.event.InputEvent.ALT_DOWN_MASK))

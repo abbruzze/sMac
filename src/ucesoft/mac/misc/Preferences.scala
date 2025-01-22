@@ -10,6 +10,7 @@ object Preferences {
   final val FLOPPY = "floppy-"
   final val MEMORY = "memory"
   final val AUTO_WARP = "auto-warp"
+  final val SKIP_MEM_TEST = "skip-mem-test"
   // ==============================================================
   
   class PreferenceIllegalArgumentException(msg:String) extends Exception(msg)
