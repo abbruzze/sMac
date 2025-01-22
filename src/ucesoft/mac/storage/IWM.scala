@@ -1,6 +1,6 @@
 package ucesoft.mac.storage
 
-import ucesoft.mac.MacModel.MAC128K
+import ucesoft.mac.MacModel.{MAC128K, SE}
 import ucesoft.mac.storage.DiskController.DiskControllerListener
 import ucesoft.mac.{MACComponent, MacModel, MessageBus}
 
@@ -45,7 +45,7 @@ class IWM extends DiskController:
   // mode Motor-off timer bit
   inline private val MODE_MOTOR_OFF_TIMER_MASK = 0b00000100
 
-  protected var driveRegisterSelection = 0 // CA2 CA1 CA0 SEL
+  protected var driveRegisterSelection = 0xF0 // CA2 CA1 CA0 SEL
   private var iwmRegisterSelection = 0   // ENABLE Q6 Q7
   protected var lstrb = false
   private var enable = false
@@ -67,7 +67,7 @@ class IWM extends DiskController:
   // byte read
   private var dataRegister = 0
   // byte reading
-  private var readShiftRegister = 0
+  protected var readShiftRegister = 0
   // byte to write
   private var writeDataRegister = 0
   // true = writeDataRegister filled with a byte to write
@@ -78,11 +78,11 @@ class IWM extends DiskController:
   private var writeShiftRegisterBits = 0
   // used to recognize a sector number
   private var sectorShiftRegister = 0
-  private var sectorByteCounter = 0
+  protected var sectorByteCounter = 0
   
   private var lastModeWasWriting = false
 
-  private var doubleSide = false
+  protected var doubleSide = false
 
   private var eventListeners: List[DiskControllerListener] = Nil
 
@@ -185,7 +185,7 @@ class IWM extends DiskController:
     else
       driveRegisterSelection &= ~SEL_MASK
 
-  inline private def getHead: Int =
+  protected def getHead: Int =
     if !doubleSide || getSelectedDrive.getFloppySides == 1 || !headsel then 0 else 1
 
   protected def getSelectedDrive: MacDrive =
@@ -217,7 +217,8 @@ class IWM extends DiskController:
       case 4 =>
         enable = bitSet
         if enable then iwmRegisterSelection |= EN_MASK else iwmRegisterSelection &= ~EN_MASK
-      case 5 => externalDrive = bitSet
+      case 5 =>
+        externalDrive = bitSet
       case 6 => if bitSet then iwmRegisterSelection |= Q6_MASK else iwmRegisterSelection &= ~Q6_MASK
       case 7 => if bitSet then iwmRegisterSelection |= Q7_MASK else iwmRegisterSelection &= ~Q7_MASK
     //println("IWM access: driveRegisterSelection=%d iwmRegisterSelection=%d".format(driveRegisterSelection,iwmRegisterSelection))
@@ -236,9 +237,9 @@ class IWM extends DiskController:
     *: the Macintosh Plus briefly asserts eject during boot for unknown reasons.
        This does not cause an actual eject on hardware, but re-emphasizes the need to observe the 750ms in an emulator.
    */
-  private def sendDiskCommand(): Unit =
+  protected def sendDiskCommand(): Unit =
     val drive = getSelectedDrive
-    driveRegisterSelection match
+    driveRegisterSelection & 0x0F match
       case 0b0000 /*TRACKUP*/ => drive.setStepDirection(stepUP = true)
       case 0b1000 /*TRACKDN*/ => drive.setStepDirection(stepUP = false)
       case 0b0010 /*TRACKSTEP*/ => drive.stepHead()
@@ -253,6 +254,8 @@ class IWM extends DiskController:
       case 0b1110 /*EJECT*/ =>
         ejecting = EJECT_LSTRB_ACTIVE_CYCLES
         ejectingDriveIndex = drive.driveIndex
+      case _ =>
+        println(s"IWM: unrecognized disk command: $driveRegisterSelection")
   end sendDiskCommand
 
   /*
@@ -306,8 +309,8 @@ class IWM extends DiskController:
                                 0 = drive is connected
                                 1 = no drive is connected
    */
-  private def readSense(drive:MacDrive): Boolean =
-    driveRegisterSelection match
+  protected def readDiskSense(drive:MacDrive): Boolean =
+    driveRegisterSelection & 0x0F match
       case 0b0000 /*/DIRTN*/ => // Head step directory: 0 = Up, 1 = Down
         !drive.isSteppingUp
       case 0b0001 /*/CISTN*/ => // Disk in place: 0 = disk in drive, 1 = no disk
@@ -341,7 +344,7 @@ class IWM extends DiskController:
       case _ =>
         log.warning("Reading unknown sense bit: %2X",driveRegisterSelection)
         true
-  end readSense
+  end readDiskSense
 
   /*
     ENABLE	Q6	Q7	Read/Write	Register addressed
@@ -369,7 +372,7 @@ class IWM extends DiskController:
         4-0       Same as bit 4-0 of the mode register
        */
       var status = mode & 0x1F
-      if readSense(getSelectedDrive) then status |= 0x80
+      if readDiskSense(getSelectedDrive) then status |= 0x80
       if enable then status |= 0x20
       log.info("IWM reading status register: %02X",status)
       status
@@ -456,6 +459,8 @@ class IWM extends DiskController:
         case 0x08 => 14 // fast mode, 7Mhz
         case 0x10 => 32 // slow mode, 8Mhz
         case 0x18 => 16 // fast mode, 8Mhz
+      if macModel == SE then
+        bitLengthCycles <<= 1
       log.info("IWM set mode to: mode=%2X bitLen=%d",mode,bitLengthCycles)
     else
       log.warning("IWM writing to unknown register: %2X",iwmRegisterSelection)
@@ -465,7 +470,7 @@ class IWM extends DiskController:
 
   protected def iwmModeRegisterWritten(mode:Int): Unit = {}
 
-  private def ejectDisk(): Unit =
+  protected def ejectDisk(): Unit =
     log.info("Disk %d ejecting ...",ejectingDriveIndex)
     getSelectedDrive.ejectFloppy()
     diskListener.onFloppyEjected(ejectingDriveIndex)
@@ -509,7 +514,7 @@ class IWM extends DiskController:
         if isWriting then
           if !lastModeWasWriting then
             diskListener.onFloppyModeChanged(drive.driveIndex,writing = true)
-            
+
           lastModeWasWriting = true
           if writeDataRegisterFilled && writeShiftRegisterBits == 0 then
             writeDataRegisterFilled = false
@@ -535,12 +540,12 @@ class IWM extends DiskController:
           // check if a proper byte has been read
           if (readShiftRegister & 0x80) == 0x80 then
             dataRegister = readShiftRegister & 0xFF
-            checkSector(dataRegister)
+            checkGCRSector(dataRegister)
             readShiftRegister = 0
         end if
   end cycle
 
-  private def checkSector(byte: Int): Unit =
+  protected def checkGCRSector(byte: Int): Unit =
     if sectorByteCounter > 0 then
       sectorByteCounter -= 1
       if sectorByteCounter == 0 then

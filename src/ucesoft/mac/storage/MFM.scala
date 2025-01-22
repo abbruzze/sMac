@@ -9,11 +9,11 @@ package ucesoft.mac.storage
  * The start of a track is aligned with a physical index pulse that is built into the drive. This index
  * pulse occurs once per revolution.
  *
- *         4E .. 4E | 00 .. 00 | C2 C2 C2 C2 FC | 4E .. 4E | sector 1| sector 2| ... | sector 18 | 4E .. 4E |
- *           Gap to     Sync     Index Mark         Gap to                                          Gap to
- *           index      Field                        first                                          end of
- *           mark                                   sector                                          track
- *           (80)        (12)        (4)             (50)                                            (??)
+ *         4E .. 4E | 00 .. 00 | C2 C2 C2 FC | 4E .. 4E | sector 1| sector 2| ... | sector 18 | 4E .. 4E |
+ *           Gap to     Sync     Index Mark      Gap to                                          Gap to
+ *           index      Field                     first                                          end of
+ *           mark                                sector                                          track
+ *           (80)        (12)        (4)          (50)                                            (??)
  *
  * Right after the index pulse is a field called the index mark that marks the start of the track. It is
  * composed of three "mark byte" $C2s followed by a normal $FC byte. Notice that the first of a set of
@@ -50,13 +50,19 @@ package ucesoft.mac.storage
  */
 object MFM:
   private inline val INDEX_MARK             = 0xC2
-  private inline val INDEX_MARK_NEXT_BYTE   = 0xFC
+  inline val INDEX_MARK_NEXT_BYTE           = 0xFC
   private inline val ADDRESS_MARK           = 0xA1
-  private inline val ADDRESS_MARK_NEXT_BYTE = 0xFE
+  inline val ADDRESS_MARK_NEXT_BYTE         = 0xFE
   private inline val CRC_ADDRESS_MARK       = 45616 // 45616 = crc of A1 x 3, FE x 1
   private inline val DATA_MARK              = 0xA1
-  private inline val DATA_MARK_NEXT_BYTE    = 0xFB
+  inline val DATA_MARK_NEXT_BYTE            = 0xFB
   private inline val CRC_DATA_MARK          = 58005 // 58005 crc of A1 x 3, FB x 1
+  inline val CRC_RESET_VALUE                = 0xFFFF
+
+  final val MARK = byte2MFM(DATA_MARK,isMark = true)
+  final val I_MARK = byte2MFM(INDEX_MARK,isMark = true)
+  inline val MARK_BYTE_SIZE = 3
+  inline val SECTOR_BYTE_POS = 3
 
   private inline val MFM_TRACK_BITS = 200_000
 
@@ -144,10 +150,10 @@ object MFM:
     for _ <- 1 to 50 do track.setInt(byte2MFM(0x4E),bits = 16)
     // sectors
     val sectorsPerTrack = diskFormat.interleave(0).length
-    val interleave = diskFormat.interleave(0).map(_ + 1) // only 1 group; MFM sectors start from 1 (not 0)
-    val trackOffset = trackId * 2 * sectorsPerTrack * 512 // 2 sides, 512 byte per sector
+    val interleave = diskFormat.interleave(0) // only 1 group; MFM sectors start from 1 (not 0)
+    val trackOffset = (trackId * 2 + side) * sectorsPerTrack * 512 // 2 sides, 512 byte per sector
     for sector <- interleave do
-      val sectorOffset = sector * 512
+      val sectorOffset = (sector - 1) * 512 // sectors start from 1 (not 0)
       // 5. Sync field (12)
       for _ <- 1 to 12 do track.setInt(byte2MFM(0x00), bits = 16)
       // 6. Address mark (4)

@@ -15,12 +15,13 @@ object DiskImage:
   enum DiskEncoding(val rawByteSize: Int,
                     val sides: Int,
                     val interleave: Array[Array[Int]],
-                    val format: Int):
+                    val format: Int,
+                    val hd:Boolean):
     // format byte: bit 5 = 0 for single sided format, bits 0-4 define the format interleave 2 = standard 2:1
-    case GCR400K extends DiskEncoding(409_600, 1, GCR.SECTORS_PER_GROUP_TRACK.map(getSectorInterleave(2, _)), 0x2)
-    case GCR800K extends DiskEncoding(819_200, 2, GCR.SECTORS_PER_GROUP_TRACK.map(getSectorInterleave(4, _)), 0x22)
-    case MFM1440K extends DiskEncoding(1_474_560, 2, Array((1 to 18).toArray), 0x22) // no interleave, 18 sectors per track, 1 group
-    case MFM720K extends DiskEncoding(737_280, 2, Array((1 to 9).toArray), 0x22) // no interleave, 9 sectors per track, 1 group
+    case GCR400K extends DiskEncoding(409_600, 1, GCR.SECTORS_PER_GROUP_TRACK.map(getSectorInterleave(2, _)), 0x2,hd = false)
+    case GCR800K extends DiskEncoding(819_200, 2, GCR.SECTORS_PER_GROUP_TRACK.map(getSectorInterleave(4, _)), 0x22,hd = false)
+    case MFM1440K extends DiskEncoding(1_474_560, 2, Array((1 to 18).toArray), 0x22,hd = true) // no interleave, 18 sectors per track, 1 group
+    case MFM720K extends DiskEncoding(737_280, 2, Array((1 to 9).toArray), 0x22,hd = true) // no interleave, 9 sectors per track, 1 group
 
   private def getSectorInterleave(format: Int, sectorsPerTrack: Int): Array[Int] =
     val sectors = Array.fill(sectorsPerTrack)(0xFF)
