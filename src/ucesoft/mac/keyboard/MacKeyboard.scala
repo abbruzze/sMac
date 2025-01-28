@@ -263,7 +263,7 @@ class MacKeyboard extends MACComponent with KeyListener:
     super.setModel(model)
     keyboardModel = model match
       case MacModel.PLUS => KeyboardModel.M0110A
-      case MacModel.SE => KeyboardModel.M0115
+      case MacModel.SE | MacModel.SEFDHD | MacModel.CLASSIC => KeyboardModel.M0115
       case _ => KeyboardModel.M0110
 
     keyMap = buildMap()
