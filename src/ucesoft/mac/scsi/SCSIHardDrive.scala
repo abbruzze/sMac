@@ -40,6 +40,17 @@ class SCSIHardDrive(override val id:Int,val file:String) extends DirectAccessSCS
     APM_BLOCKS(0x200 + 0xE) = (availableTotalBlock >> 8).toByte
     APM_BLOCKS(0x200 + 0xF) = (availableTotalBlock & 0xFF).toByte
 
+  private def isEmptyDisk(in:FileInputStream): Boolean =
+    val buffer = Array.ofDim[Byte](1024)
+    var isEmpty = true
+    var read = in.read(buffer)
+    while read != -1 && isEmpty do
+      for i <- buffer.indices do
+        if buffer(i) != 0 then
+          isEmpty = false
+          read = -1
+    isEmpty
+
 
   private def mapFile(): MappedByteBuffer =
     val storageFile = new File(file)
@@ -51,9 +62,15 @@ class SCSIHardDrive(override val id:Int,val file:String) extends DirectAccessSCS
     // check if APM (Apple Partition Map) is present
     val in = new FileInputStream(storageFile)
     val ddrMagic = in.read << 24 | in.read << 16 | in.read << 8 | in.read
+
+    if ddrMagic != 0x45_52_02_00 then // is it a valid disk with partitions ?
+      if ddrMagic == 0 then // no, is it an empty disk ?
+        if !isEmptyDisk(in) then
+          initAPM(storageFile.length().toInt)
+      else
+        initAPM(storageFile.length().toInt)
+
     in.close()
-    if ddrMagic != 0x45_52_02_00 then
-      initAPM(storageFile.length().toInt)
 
     val channel = Files.newByteChannel(storageFile.toPath,StandardOpenOption.READ,StandardOpenOption.WRITE).asInstanceOf[FileChannel]
     channel.map(FileChannel.MapMode.READ_WRITE,0,channel.size())
