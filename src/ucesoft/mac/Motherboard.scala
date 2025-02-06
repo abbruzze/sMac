@@ -11,7 +11,7 @@ import ucesoft.mac.mouse.QuadMouse
 import ucesoft.mac.rtc.RTC
 import ucesoft.mac.scsi.NCR5380
 import ucesoft.mac.serial.Z8530
-import ucesoft.mac.storage.{DiskController, IWM}
+import ucesoft.mac.storage.{DiskController, IWM, SWIM}
 import ucesoft.mac.video.MacVideo
 import ucesoft.mac.video.MacVideo.VideoSignalListener
 
@@ -29,7 +29,7 @@ class Motherboard extends MACComponent with Clockable with VideoSignalListener w
   final val scsi = new NCR5380
   final val rtc = new RTC
   final val scc = new Z8530(sccIRQLow)
-  final val iwm : DiskController = new IWM
+  final val iwm : DiskController = new SWIM
   final val video = new MacVideo
   final val mouse = new QuadMouse(zoomFactorX = 2,zoomFactorY = 2)
   final val keyboard = new MacKeyboard

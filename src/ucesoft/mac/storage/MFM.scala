@@ -51,10 +51,11 @@ package ucesoft.mac.storage
 object MFM:
   private inline val INDEX_MARK             = 0xC2
   inline val INDEX_MARK_NEXT_BYTE           = 0xFC
-  private inline val ADDRESS_MARK           = 0xA1
+  inline val ADDRESS_MARK                   = 0xA1
   inline val ADDRESS_MARK_NEXT_BYTE         = 0xFE
+  inline val CRC_MARK                       = 52660 // crc of A1 x 3
   private inline val CRC_ADDRESS_MARK       = 45616 // 45616 = crc of A1 x 3, FE x 1
-  private inline val DATA_MARK              = 0xA1
+  inline val DATA_MARK                      = 0xA1
   inline val DATA_MARK_NEXT_BYTE            = 0xFB
   private inline val CRC_DATA_MARK          = 58005 // 58005 crc of A1 x 3, FB x 1
   inline val CRC_RESET_VALUE                = 0xFFFF
@@ -149,11 +150,11 @@ object MFM:
     // 4. Gap to first sector (50)
     for _ <- 1 to 50 do track.setInt(byte2MFM(0x4E),bits = 16)
     // sectors
-    val sectorsPerTrack = diskFormat.interleave(0).length
+    val bytesPerTrack = diskFormat.interleave(0).length * 512
     val interleave = diskFormat.interleave(0) // only 1 group; MFM sectors start from 1 (not 0)
-    val trackOffset = (trackId * 2 + side) * sectorsPerTrack * 512 // 2 sides, 512 byte per sector
+    val trackOffset = (trackId * 2 + side) * bytesPerTrack // 2 sides, 512 byte per sector
     for sector <- interleave do
-      val sectorOffset = (sector - 1) * 512 // sectors start from 1 (not 0)
+      val sectorOffset = trackOffset + (sector - 1) * 512 // sectors start from 1 (not 0)
       // 5. Sync field (12)
       for _ <- 1 to 12 do track.setInt(byte2MFM(0x00), bits = 16)
       // 6. Address mark (4)
@@ -195,3 +196,56 @@ object MFM:
     track.finish()
     track
   end encodeTrack
+
+  private def findDataMark(track:Track,nextByte:Int,markTrack:Boolean): Boolean =
+    var sr = 0
+    var dmCount = 0
+    val buffer = Array(0,0,0)
+
+    while !track.isMarkReached do
+      sr <<= 1
+      sr |= track.getAndMoveOn
+
+      if (sr & 0xFFFF) == MARK then
+        for i <- 0 to 2 do
+          buffer(i) = track.getNextByte << 8 | track.getNextByte
+          if i == 2 then buffer(i) = mfm2Byte(buffer(i))
+        if buffer(0) == MARK && buffer(1) == MARK && buffer(2) == nextByte then
+          if markTrack then track.setMark()
+          return true
+        sr = 0
+    end while
+
+    false
+  end findDataMark
+  
+  def decodeTrack(track:Track,trackID:TrackPos,side:Int): Either[String,Array[Byte]] =
+    val sectors = Array.ofDim[Byte](18 * 512)
+    var firstMark = true
+    var sectorsFound = 0
+
+    track.resetPositionTo()
+    track.setMark()
+
+    while sectorsFound < 18 do
+      // find address mark
+      if !findDataMark(track,ADDRESS_MARK_NEXT_BYTE,firstMark) then return Left(s"Address mark not found on track $trackID side $side")
+      firstMark = false
+      val tid = mfm2Byte(track.getNextByte << 8 | track.getNextByte)
+      val sd = mfm2Byte(track.getNextByte << 8 | track.getNextByte)
+      val sector = mfm2Byte(track.getNextByte << 8 | track.getNextByte)
+      println(s"[$sectorsFound/18]Found address mark: track $tid side $sd sector $sector")
+      if tid != trackID then return Left(s"Track ID mismatch on track $trackID side $side: found $tid")
+      if sd != side then return Left(s"Side mismatch on track $trackID side $side: found $sd")
+      if sector < 1 || sector > 18 then return Left(s"Invalid sector number on track $trackID side $side: $sector")
+      if !findDataMark(track,DATA_MARK_NEXT_BYTE,false) then return Left(s"Data mark not found on track $trackID side $side")
+      println(s"[$sectorsFound/18]Found data mark: track $tid side $sd sector $sector")
+      // 512 byte of data
+      val sectorOffset = (sector - 1) * 512
+      for i <- 0 until 512 do
+        sectors(sectorOffset + i) = mfm2Byte(track.getNextByte << 8 | track.getNextByte).toByte
+      sectorsFound += 1
+    end while
+
+    Right(sectors)
+  end decodeTrack

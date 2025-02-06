@@ -36,7 +36,7 @@ class RTC extends MACComponent:
   private var loadedFromFile = ""
 
   private final val DEFAULT_PRAM_VALUES = Array(
-  // 00   01   02   03   04   05   06   07   08   09   0A   0B   0C   0D   0E   0F  
+  // 00   01   02   03   04   05   06   07   08   09   0A   0B   0C   0D   0E   0F
     0x00,0x80,0x4F,0x00,0x00,0x00,0x00,0x00,0x05,0x58,0x01,0x60,0x42,0x75,0x67,0x73,
     0xA8,0x00,0x01,0x22,0xCC,0x0A,0xCC,0x0A,0xC8,0xFB,0x9C,0x890,0x00,0x02,0xA3,0x01
   )
@@ -52,7 +52,7 @@ class RTC extends MACComponent:
         MessageBus.send(MessageBus.ShuttingdownItem(this,"Saving pram ..."))
         val pramDir = new File(homeDir,"pram")
         val pramFile = new File(pramDir,s"pram$macModel.bin")
-        // Don't know why: if pram(19) == 0x21 (and seems to happend when the user request a shutdown) the boot remains stuck
+        // Don't know why: if pram(19) == 0x21 (and seems to happen when the user request a shutdown) the boot remains stuck
         if pram(19) == 0x21 then pram(19) = 0x22
         java.nio.file.Files.write(pramFile.toPath,pram.map(_.toByte))
       case MessageBus.Configuration(_,ConfigContext(homeDir,_,_)) =>

@@ -105,7 +105,8 @@ class MacDiskImage(val fileName:String,private val emptyDisk:Boolean = false) ex
       encoding = in.read() match
         case 0x00 => GCR400K // GCR CLV ssdd (400k)
         case 0x01 => GCR800K // GCR CLV dsdd (800k)
-        case e => throw new IllegalArgumentException(s"Invalid disk encoding: $e")
+        case 0x02 => MFM720K // MFM 2sdd (720k)
+        case 0x03 => MFM1440K // MFM 2dd (1440k)
       val format = in.read() // skip this byte: format is already defined by encoding...for now
       // image data
       in.seek(0x54)
@@ -121,7 +122,10 @@ class MacDiskImage(val fileName:String,private val emptyDisk:Boolean = false) ex
         return false
 
       imageFormat = ImageFormat.DC42
-      GCREncoder.encodeGCRTracks(tracks,encoding,data,tags)
+      if encoding == GCR400K || encoding == GCR800K then
+        GCREncoder.encodeGCRTracks(tracks,encoding,data,tags)
+      else
+        MFM.encodeMFMTracks(tracks,encoding,data)
       true
     finally
       in.close()

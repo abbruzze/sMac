@@ -104,7 +104,7 @@ enum MacModel(val clockRateMhz:Int,
     audioSettings = AudioSettings(alternateAudioBufferOffset = -0x5C00),
     pramExtended = true,
     scsi = true,
-    floppySettings = FloppySettings(drivesNumber = 3, doubleDensity = true, fdhd = true)
+    floppySettings = FloppySettings(drivesNumber = 2, doubleDensity = true, fdhd = true)
   )
   case CLASSIC extends MacModel(
     clockRateMhz = 7_833_600,

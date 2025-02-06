@@ -26,14 +26,22 @@ class StoragePanel extends JPanel with DiskController.DiskControllerListener wit
     var track = 0
     var sector = 0
     var doubleSide = false
+    var writing = false
 
     init()
 
     private def getInfo: String =
-      if doubleSide then
-        "[%d] %d-%02d/%02d".format(index,head,track,sector)
+      if writing then
+        if doubleSide then
+          "[%d] %d-%02d".format(index,head,track)
+        else
+          "[%d] %02d".format(index,track)
       else
-        "[%d] %02d/%02d".format(index,track, sector)
+        if doubleSide then
+          "[%d] %d-%02d/%02d".format(index, head, track, sector)
+        else
+          "[%d] %02d/%02d".format(index, track, sector)
+
 
     private def init(): Unit =
       setLayout(new FlowLayout(FlowLayout.LEFT))
@@ -125,4 +133,7 @@ class StoragePanel extends JPanel with DiskController.DiskControllerListener wit
       diskette(driveIndex).setBorder(BorderFactory.createEmptyBorder())
     }
   override def onFloppyModeChanged(driveIndex: Int, writing: Boolean): Unit =
-    swing { diskette(driveIndex).icon.setIcon(if writing then disketteWrite else disketteRead) }
+    swing {
+      diskette(driveIndex).icon.setIcon(if writing then disketteWrite else disketteRead)
+      diskette(driveIndex).writing = writing
+    }

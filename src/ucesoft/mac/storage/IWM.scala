@@ -73,9 +73,9 @@ class IWM extends DiskController:
   // true = writeDataRegister filled with a byte to write
   private var writeDataRegisterFilled = false
   // writing byte
-  private var writeShiftRegister = 0
+  protected var writeShiftRegister = 0
   // bits to write
-  private var writeShiftRegisterBits = 0
+  protected var writeShiftRegisterBits = 0
   // used to recognize a sector number
   private var sectorShiftRegister = 0
   protected var sectorByteCounter = 0
@@ -86,7 +86,7 @@ class IWM extends DiskController:
 
   private var eventListeners: List[DiskControllerListener] = Nil
 
-  protected val diskListener = new DiskControllerListener:
+  protected val diskListener : DiskControllerListener = new DiskControllerListener:
     override def onHeadSelected(driveIndex:Int,head:Int): Unit =
       eventListeners.foreach(_.onHeadSelected(driveIndex,head))
     override def onTrackChanged(driveIndex: TrackPos, track: TrackPos): Unit =
@@ -153,14 +153,15 @@ class IWM extends DiskController:
   override def getProperties: List[MACComponent.Property] =
     import MACComponent.Property
     def b2i(b:Int):0|1 = if b != 0 then 1 else 0
+    val drive = getSelectedDrive
     val common = List(
       Property("Drive register selection",s"CA2=${b2i(driveRegisterSelection & CA2_MASK)} CA1=${b2i(driveRegisterSelection & CA1_MASK)} CA0=${b2i(driveRegisterSelection & CA0_MASK)} SEL=${b2i(driveRegisterSelection & SEL_MASK)}"),
       Property("IWM register selection",s"ENABLE=${b2i(iwmRegisterSelection & EN_MASK)} Q6=${b2i(iwmRegisterSelection & Q6_MASK)} Q7=${b2i(iwmRegisterSelection & Q7_MASK)}"),
       Property("External drive",externalDrive.toString),
       Property("LSTRB",lstrb.toString),
       Property("Mode","%02X".format(mode)),
-      Property("Selected drive",getSelectedDrive.driveIndex.toString),
-      Property("Motor on",getSelectedDrive.isMotorOn.toString)
+      Property("Selected drive",if drive != null then drive.driveIndex.toString else "-"),
+      Property("Motor on",if drive != null then drive.isMotorOn.toString else "-")
     )
     val drivesProp = for d <- drives.toList yield
       List(
@@ -179,7 +180,9 @@ class IWM extends DiskController:
 
   override def setHeadSelLine(set:Boolean): Unit =
     headsel = set
-    diskListener.onHeadSelected(getSelectedDrive.driveIndex,if set then 1 else 0)
+    val drive = getSelectedDrive
+    if drive != null then
+      diskListener.onHeadSelected(drive.driveIndex,if set then 1 else 0)
     if set then
       driveRegisterSelection |= SEL_MASK
     else
@@ -487,7 +490,9 @@ class IWM extends DiskController:
       false
 
   override def updatePWMSample(pwm:Int): Unit =
-    getSelectedDrive.updatePWMDutyCycle(pwm)
+    val drive = getSelectedDrive
+    if drive != null then
+      drive.updatePWMDutyCycle(pwm)
 
   inline private def isWriting: Boolean = writeDataRegisterFilled || writeShiftRegisterBits > 0
 

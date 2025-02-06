@@ -10,7 +10,7 @@ import scala.collection.mutable
  *
  * Based on:
  *  1. SWIM_Chip_Users_Ref_198801
- *  2. SonyMFM.a, SonyEqu.a : https://github.com/elliotnunn/supermario/tree/master
+ *  2. SonyMFM.a, SonyEqu.a, Sony.a : https://github.com/elliotnunn/supermario/tree/master
  *
  */
 class SWIM extends IWM:
@@ -32,7 +32,7 @@ class SWIM extends IWM:
       HANDSHAKE     // R A3..A0 = 1111
 
   private enum STATE:
-    case Idle, Reading, Writing, WritingCRC
+    case Idle, Reading, Writing
 
   // Error register useful bits
   private inline val ERROR_UNDERRUN = 0x1
@@ -73,7 +73,6 @@ class SWIM extends IWM:
   private final val pram = Array.ofDim[Int](16)
   private var pramAddress = 0
 
-  private var iwmMode = true
   private var iwmModeStateCounter = 0
 
   private var mfmMode = true
@@ -83,47 +82,82 @@ class SWIM extends IWM:
   private var mfmMarkCounter = 0
   private var mfmBitCount = 0
 
+  private var driveSelected = 0
+
   private var crc = 0xFFFF
-  private var crcWritePending = false // will cause two bytes from the internal CRC generator to be written out instead of a regular data byte
+  private var writeCrcCounter = 0
 
   private var state = STATE.Idle
+  private var swimCycles = 0 // see setModel
+
+  private var savedDriveRegisterSelection = 0
 
   import STATE.*
   import REGISTER.*
+
+  override protected def reset(): Unit =
+    super.reset()
+    errorRegisterLockedForWriting = false
+    fifo.clear()
+    java.util.Arrays.fill(pram,0)
+    pramAddress = 0
+    iwmModeStateCounter = 0
+    mfmMode = true
+    mfmBitCycles = 0
+    mfmBitLengthCycles = 0
+    mfmInSync = false
+    mfmMarkCounter = 0
+    mfmBitCount = 0
+    writeCrcCounter = 0
+    state = STATE.Idle
+  end reset
+
+  override protected def setModel(model: MacModel): Unit =
+    super.setModel(model)
+    swimCycles = if macModel.ordinal >= MacModel.SEFDHD.ordinal then 2 else 1 // 2 = 16Mhz, 1 = 8Mhz
+    log.info("SWIM set clock multiplier to %d",swimCycles)
+  end setModel
 
   override def getProperties: List[MACComponent.Property] =
     val sp = super.getProperties
     if macModel.ordinal < MacModel.SEFDHD.ordinal then sp
     else
+      var tp = "-"
+      if getSelectedDrive != null && getSelectedDrive.isFloppyIn then
+        val tr = getSelectedDrive.getTrack
+        val t = getSelectedDrive.getFloppy.get.getTrack(getHead,tr)
+        tp = s"${t.getPos}/${t.getBitSize}"
       List(
         MACComponent.Property("IWM mode",iwmMode.toString),
         MACComponent.Property("ACTION",ACTION.toString),
         MACComponent.Property("State",state.toString),
         MACComponent.Property("MFM mode",mfmMode.toString),
         MACComponent.Property("PRAM",pram.map(b => "%02X".format(b)).mkString(",")),
+        MACComponent.Property("Track position",tp),
       ) ::: sp
   end getProperties
 
   private inline def ACTION : Boolean = (swimReg(MODE.ordinal) & 0x8) != 0
   private inline def isReadMode: Boolean = (swimReg(MODE.ordinal) & MODE_RW) == 0
+  private inline def iwmMode: Boolean = (swimReg(MODE.ordinal) & MODE_ISM_IWM_SELECT) == 0
 
   // ========================= CRC =============================================
   private def updateCRC(byte:Int): Unit = crc = MFM.crc(byte,crc)
   private def resetCRC(): Unit =
     crc = MFM.CRC_RESET_VALUE
-    // TODO different value for reading or writing ??
   // ====================== FIFO ===============================================
-  private inline def isFIFOFull: Boolean = fifo.size == 2
+  private inline def isFIFOFull: Boolean = fifo.size > 1 // takes into account also crc appended bytes
   private inline def isFIFOEmpty: Boolean = fifo.isEmpty
   private inline def isFIFOHeadMarkByte: Boolean = (fifo.headOption.getOrElse(-1) & MARK_BYTE_MASK) != 0
 
-  private def fifoEnqueue(b:Int,markByte:Boolean): Unit =
-    updateCRC(b)
-    println(s"Enqueuing $b mark=$markByte [CRC=$crc]")
-    if !isFIFOFull then
+  private def fifoEnqueue(b:Int,markByte:Boolean,crc:Boolean = false): Unit =
+    if !crc then
+      updateCRC(b)
+    //println(s"Enqueuing $b mark=$markByte [CRC=$crc]")
+    if crc || !isFIFOFull then
       fifo.enqueue(if markByte then b | MARK_BYTE_MASK else b)
     else
-      swimReg(ERROR.ordinal) |= ERROR_UNDERRUN
+      writeErrorBits(ERROR_UNDERRUN)
       println("FIFO is FULL!!")
 
   private def fifoDequeue(): Int =
@@ -134,6 +168,10 @@ class SWIM extends IWM:
       0
   private def clearFifo(): Unit = fifo.clear()
   // ====================== IWM changes ========================================
+  private def saveDriveRegisterSelection(): Unit =
+    val drs = driveRegisterSelection
+    driveRegisterSelection = savedDriveRegisterSelection
+    savedDriveRegisterSelection = drs
   /*
     The ISM/IWM bit selects which register set will be used. To select the ISM set, you must
     write to the GCR mode register four times in a row with this bit set to "1 ", "0", "1","1 ",
@@ -149,26 +187,26 @@ class SWIM extends IWM:
         if ismIwmSelect == 1 then
           log.info("SWIM: ISM mode set")
           println("ISM mode set")
-
-          iwmMode = false
           swimReg(MODE.ordinal) |= MODE_ISM_IWM_SELECT
+          saveDriveRegisterSelection()
+
         iwmModeStateCounter = 0
   end iwmModeRegisterWritten
 
   override protected def getSelectedDrive: MacDrive =
     if iwmMode then
       super.getSelectedDrive
-    else if (swimReg(MODE.ordinal) & MODE_ENABLE1) != 0 then drives(0)
-    else if (swimReg(MODE.ordinal) & MODE_ENABLE2) != 0 then drives(1)
-    else
-      //println(s"getSelectedDrive cannot determine the selected drive mode=${swimReg(MODE.ordinal)}")
-      drives(0)
+    else if driveSelected != -1 then drives(driveSelected) else null
   end getSelectedDrive
+  
   // ===========================================================================
   private def initAction(): Unit =
     mfmInSync = false
     mfmBitCount = 0
     readShiftRegister = 0
+    writeShiftRegisterBits = 0
+    writeShiftRegister = 0
+    writeCrcCounter = 0
     // TODO check
     mfmBitLengthCycles = macModel.clockRateMhz / 500_000 // 500 Kbit/s => 16 cycles per bit
     mfmBitCycles = 0
@@ -184,44 +222,71 @@ class SWIM extends IWM:
    * information (see the section on error correction).
    */
   private def readDataRegister: Int =
-    println("Read data register")
+    //println("Read data register")
     if isFIFOEmpty then
-      swimReg(ERROR.ordinal) |= ERROR_OVERRUN
+      writeErrorBits(ERROR_OVERRUN)
       0xFF
     else
       val byte = fifoDequeue()
       if (byte & MARK_BYTE_MASK) != 0 then
-        swimReg(ERROR.ordinal) |= ERROR_MARK_BYTE_READ
+        writeErrorBits(ERROR_MARK_BYTE_READ)
       byte & 0xFF
   end readDataRegister
 
-  private def writeDataRegister(value:Int): Unit = ???
+  private def writeDataRegister(value:Int): Unit =
+    //println(s"Write data register: $value")
+    if isFIFOFull then
+      writeErrorBits(ERROR_OVERRUN)
+    else
+      fifoEnqueue(value,markByte = false)
+  end writeDataRegister
+
   private def readCorrectionRegister: Int =
     swimReg(CORRECTION.ordinal)
 
   private def readMarkRegister: Int =
-    println("Read mark register")
+    //println("Read mark register")
     if isFIFOEmpty then
-      swimReg(ERROR.ordinal) |= ERROR_OVERRUN
+      writeErrorBits(ERROR_OVERRUN)
       0xFF
     else
       val byte = fifoDequeue()
       byte & 0xFF
   end readMarkRegister
 
-  private def writeMarkRegister(value:Int): Unit = ???
+  private def writeMarkRegister(value:Int): Unit =
+    //println(s"Write mark register: $value")
+    if isFIFOFull then
+      writeErrorBits(ERROR_OVERRUN)
+    else
+      fifoEnqueue(value, markByte = true)
+      if value == MFM.DATA_MARK then
+        writeCrcCounter += 1
+        if writeCrcCounter == 3 then // start of an address or data block that needs CRC calculation
+          crc = MFM.CRC_MARK // crc of A1 x 3
+          writeCrcCounter = 0
+          //println(s"CRC reset to $crc")
+      else
+        writeCrcCounter = 0
+  end writeMarkRegister
+
   private def writeCRCRegister(): Unit =
-    crcWritePending = true
+    // will cause two bytes from the internal CRC generator to be written out instead of a regular data byte
+    //println(s"Write CRC: $crc = [${(crc >> 8) & 0xFF} ${crc & 0xFF}]")
+    fifoEnqueue((crc >> 8) & 0xFF,markByte = false,crc = true)
+    fifoEnqueue(crc & 0xFF,markByte = false,crc = true)
+  end writeCRCRegister
+
   private def writeIWMConfRegister(value:Int): Unit =
     swimReg(IWM_CONF.ordinal) = value
     println(s"IWM configuration register = $value")
   private def readPRAM(): Int =
-    println(s"Reading pram [$pramAddress] = ${pram(pramAddress)}")
+    //println(s"Reading pram [$pramAddress] = ${pram(pramAddress)}")
     val value = pram(pramAddress)
     pramAddress = (pramAddress + 1) & 0xF
     value
   private def writePRAM(value:Int): Unit =
-    println(s"Writing PRAM [$pramAddress] = $value")
+    //println(s"Writing PRAM [$pramAddress] = $value")
     pram(pramAddress) = value
     pramAddress = (pramAddress + 1) & 0xF
 
@@ -250,24 +315,25 @@ class SWIM extends IWM:
       if (value & 2) != 0 then driveRegisterSelection |= CA1_MASK else driveRegisterSelection &= ~CA1_MASK
     if (outBits & 4) != 0 then
       if (value & 4) != 0 then driveRegisterSelection |= CA2_MASK else driveRegisterSelection &= ~CA2_MASK
-    if (outBits & 8) != 0 && !lstrb then
+    if (outBits & 8) != 0 then
+      val oldLstrb = lstrb
       lstrb = (value & 0x8) != 0
-      if lstrb then
+      if oldLstrb && !lstrb then
         sendDiskCommand()
   private def readSetup: Int =
     swimReg(SETUP.ordinal)
   private def writeSetup(value:Int): Unit =
     swimReg(SETUP.ordinal) = value
-    mfmMode = (value & SETUP_GCR) == 0
-    if !mfmMode then
-      println("GCR mode enabled (SETUP)")
-    else
-      println("MFM mode enabled (SETUP)")
-    println(s"FCLK/2 bit = ${(value & SETUP_FCLK) != 0}")
+//    mfmMode = (value & SETUP_GCR) == 0
+//    if !mfmMode then
+//      println("GCR mode enabled (SETUP)")
+//    else
+//      println("MFM mode enabled (SETUP)")
+//    println(s"FCLK/2 bit = ${(value & SETUP_FCLK) != 0}")
   end writeSetup
 
   private def writeMode(value:Int, modeZero:Boolean): Unit =
-    println(s"Writing mode: $value modeZero=$modeZero")
+    //println(s"Writing mode: $value modeZero=$modeZero")
     if modeZero then
       // The pram counter is set to zero after any access is made to the Mode 0 register (register 6) or the chip is reset.
       pramAddress = 0
@@ -287,6 +353,20 @@ class SWIM extends IWM:
       resetCRC()
     // 1 Setting this bit along with bit 7 (MotorOn) will enable drive 1.
     // 2 Setting this bit along with bit 7 (MotorOn) will enable drive 2.
+    if (swimReg(MODE.ordinal) & (MODE_ENABLE1 | MODE_ENABLE2 | MODE_MOTORON)) != 0 then
+      if (swimReg(MODE.ordinal) & MODE_MOTORON) != 0 then
+        (swimReg(MODE.ordinal) >> 1) & 3 match
+          case 0 =>
+            //println("NO drive selected!")
+            driveSelected = -1
+          case 1 =>
+            driveSelected = 0
+          case 2 =>
+            driveSelected = 1
+          case 3 =>
+            println("BOTH drives selected!")
+      else
+        driveSelected = -1
     /* 3 Setting the ACTION bit to "1" starts a read or write operation. It should be set only after
          everything else has been set up. When writing, at least one byte of data should be written to
          the FIFO before this bit is set to prevent an underrun when the chip goes to fetch a byte from
@@ -301,7 +381,7 @@ class SWIM extends IWM:
       println(s"ACTION set. State = $state")
     else if (oldMode & MODE_ACTION) != 0 && (swimReg(MODE.ordinal) & MODE_ACTION) == 0 then
       state = Idle
-      println("ACTION cleared. State = Idle")
+      //println("ACTION cleared. State = Idle")
     // 4 This bit determines whether an operation will be a read (0) or write (1) operation.
     // 5 Sets the state of the HDSEL pin if the Q3* /HDSEL bit in the Setup register is set to "1 ".
     // Not used
@@ -309,16 +389,17 @@ class SWIM extends IWM:
     if (swimReg(MODE.ordinal) & MODE_ISM_IWM_SELECT) == 0 then
       log.info("SWIM: IWM mode set")
       println("IWM mode set")
-      iwmMode = true
+      saveDriveRegisterSelection()
     // 7 Enables/disables the /ENBLl and /ENBL2 drive enables (assuming bit 1 or 2 is set).
     //   This bit must be set prior to setting ACTION and must not be cleared until after ACTION is cleared.
   end writeMode
 
   private def readStatus: Int =
-    println("Reading status ...")
+    //println("Reading status ...")
     swimReg(MODE.ordinal)
 
   private def writeErrorBits(errorBits:Int): Unit =
+    //println(s"Error bits set: $errorBits")
     if !errorRegisterLockedForWriting then
       errorRegisterLockedForWriting = true
       swimReg(ERROR.ordinal) |= errorBits
@@ -329,13 +410,13 @@ class SWIM extends IWM:
    * before beginning a read or write operation.
    */
   private def readError: Int =
-    println("Reading error ...")
+    //println("Reading error ...")
     val error = swimReg(ERROR.ordinal)
     swimReg(ERROR.ordinal) = 0
     errorRegisterLockedForWriting = false
     error
   private def readHandshake: Int =
-    println("Reading handshake ...")
+    //println("Reading handshake ...")
     var hs = 0
     // 0 If set to 1 it indicates that the next byte to be read is a mark byte (i.e., has a dropped clock pulse).
     if isFIFOHeadMarkByte then hs |= HANDSHAKE_MARK_BYTE
@@ -345,9 +426,14 @@ class SWIM extends IWM:
     //   be read from the FIFO.
     if crc != 0 then hs |= HANDSHAKE_CRC_ERROR
     // 2 This bit returns the current state of the RDDATA input from the drive.
-    // TODO
+    // TODO ?
+    val drive = getSelectedDrive
+    if drive != null then
+      if drive.getBitOnHead(getHead, moveAhead = false) then hs |= HANDSHAKE_RDDATA
     // 3 This bit returns the current state of the SENSE input.
-    if readDiskSense(getSelectedDrive) then hs |= HANDSHAKE_SENSE
+    if drive != null then
+      //println(s"Reading handshake sense ${driveRegisterSelection & 0xF}")
+      if readDiskSense(drive) then hs |= HANDSHAKE_SENSE
     // 4 This bit is set to 1 if either the MotorOn bit in the mode register is a 1 or the timer is timing out
     if (swimReg(MODE.ordinal) & MODE_MOTORON) != 0 then hs |= HANDSHAKE_MOTORON
     // 5 If this bit is set, it indicates that one of the bits in the Error register is set. The bit is cleared by reading the Error register or when the chip is reset.
@@ -425,109 +511,6 @@ class SWIM extends IWM:
       0
     end if
   end rwRegister
-  /*
-  private def rwRegister(a3a2a1a0:Int,isRead:Boolean,value:Int = -1): Option[Int] =
-    a3a2a1a0 & 0b1111 match
-      case 0b1_000 => // read DATA/CORRECTION
-        if isRead then
-          if ACTION then
-            Some(readDataRegister) // ACTION = 1
-          else
-            Some(readCorrectionRegister)
-        else
-          println("Reading data/correction register with write operation")
-          None
-      case 0b0_000 => // write DATA
-        if !isRead then
-          writeDataRegister(value)
-        else
-          println("Writing data register with read operation")
-        None
-      case 0b1_001 => // read MARK
-        if isRead then
-          Some(readMarkRegister)
-        else
-          println("Reading mark register with write operation")
-          Some(readMarkRegister)
-      case 0b0_001 => // write MARK
-        if !isRead then
-          writeMarkRegister(value)
-        else
-          println("Writing mark register with read operation")
-        None
-      case 0b0_010 => // write CRC/IWM Conf
-        if !isRead then
-          if ACTION then
-            writeCRCRegister() // ACTION = 1
-          else
-            writeIWMConfRegister(value)
-        else
-          println("Writing crc/iwmconf register with read operation")
-        None
-      case 0b1_011 => // read PRAM
-        if isRead then
-          Some(readPRAM())
-        else
-          println("Reading pram with write operation")
-          Some(readPRAM())
-      case 0b0_011 => // write PRAM
-        if !isRead then
-          writePRAM(value)
-        else
-          println("Writing pram register with read operation")
-        None
-      case 0b1_100 => // read PHASE
-        if isRead then
-          Some(readPhase)
-        else
-          println("Reading phase register with write operation")
-          Some(readPhase)
-      case 0b0_100 => // write PHASE
-        if !isRead then
-          writePhase(value)
-        else
-          println("Writing phase register with read operation")
-        None
-      case 0b1_101 => // read SETUP
-        if isRead then
-          Some(readSetup)
-        else
-          println("Reading setup register with write operation")
-          Some(readSetup)
-      case 0b0_101 => // write SETUP
-        if !isRead then
-          writeSetup(value)
-        else
-          println("Writing setup register with read operation")
-        None
-      case addr@(0b0_110 | 0b0_111) => // write MODE
-        if !isRead then
-          writeMode(value,(addr & 1) == 0)
-        else
-          println("Writing mode register with read operation")
-        None
-      case 0b1_110 => // read STATUS
-        if isRead then
-          Some(readStatus)
-        else
-          println("Reading status register with write operation")
-          Some(readStatus)
-      case 0b1_010 => // read ERROR
-        if isRead then
-          Some(readError)
-        else
-          println("Reading error register with write operation")
-          Some(readError)
-      case 0b1_111 => // read HANDSHAKE
-        if isRead then
-          Some(readHandshake)
-        else
-          println("Reading handshake register with write operation")
-          Some(readHandshake)
-      case addr =>
-        println(s"Accessing unknown register: $addr")
-        None
-  end rwRegister*/
 
   // ==================== Drive sense =================================
   override protected def readDiskSense(drive: MacDrive): Boolean =
@@ -548,16 +531,18 @@ class SWIM extends IWM:
         drive.getTrack > 0
       case 0b0110 /*EJECT*/ => // Disk ejecting: 0 = not ejecting, 1 = ejecting
         ejecting > 0
-      case 0b0111 /*/TACH*/ => // on SWIM seems to report INDEX pulse
-        println("Getting TACH...")
-        if macModel.ordinal < MacModel.SEFDHD.ordinal then
-          drive.getTACH
+      case 0b0111 /*/TACH*/ =>
+        drive.getTACH
+      case 0b1000 /*RDDATA0*/ => // bit on lower head or if on index a pulse
+        if macModel.ordinal < MacModel.SEFDHD.ordinal || isReadMode then // on SWIM seems to report INDEX pulse on writing
+          drive.getBitOnHead(0, moveAhead = false)
         else
           drive.isOnIndexHole
-      case 0b1000 /*RDDATA0*/ => // bit on lower head or if on index a pulse
-        drive.getBitOnHead(0, moveAhead = false)//TODO || drive.isOnIndexHole
       case 0b1001 /*RDDATA1*/ => // bit on upper head or if on index a pulse
-        drive.getBitOnHead(1, moveAhead = false)//TODO || drive.isOnIndexHole
+        if macModel.ordinal < MacModel.SEFDHD.ordinal || isReadMode then
+          drive.getBitOnHead(1, moveAhead = false)
+        else
+          drive.isOnIndexHole
       case 0b1010 /*SUPERDRIVE*/ =>
         macModel.ordinal >= MacModel.SEFDHD.ordinal
       case 0b1011 /*MFM ?*/ =>
@@ -580,35 +565,39 @@ class SWIM extends IWM:
   end readDiskSense
   // ===================== Drive command ==================================
   override def sendDiskCommand(): Unit =
+    //println(s"Disk command: ${driveRegisterSelection & 0x0F}")
     val drive = getSelectedDrive
-    driveRegisterSelection & 0x0F match
-      case 0b0000 /*TRACKUP*/ => drive.setStepDirection(stepUP = true)
-      case 0b1000 /*TRACKDN*/ => drive.setStepDirection(stepUP = false)
-      case 0b0010 /*TRACKSTEP*/ => drive.stepHead()
-      case 0b0011 /*MFM MODE*/ =>
-        mfmMode = true
-        println("MFM mode on")
-      case 0b0100 /*MOTORON*/ => drive.setMotorOn(on = true)
-      case 0b1011 /*GCR MODE*/ =>
-        mfmMode = false
-        println("GCR mode on (command)")
-      case 0b1100 /*MOTOROFF*/ =>
-        if drive.isMotorOn then
-          // check mode Motor-off timer bit
-          if (swimReg(SETUP.ordinal) & SETUP_MOTORON_TIMER) != 0 then
-            motorIsTurningOff = MOTOR_OFF_1_SEC_CYCLES
-          else
-            motorIsTurningOff = 1 // 1 cycle
-      case 0b1110 /*EJECT*/ =>
-        ejecting = FDHD_EJECT_CYCLES
-        ejectingDriveIndex = drive.driveIndex
+    if drive != null then
+      driveRegisterSelection & 0x0F match
+        case 0b0000 /*TRACKUP*/ => drive.setStepDirection(stepUP = true)
+        case 0b1000 /*TRACKDN*/ => drive.setStepDirection(stepUP = false)
+        case 0b0010 /*TRACKSTEP*/ => drive.stepHead()
+        case 0b0011 /*MFM MODE*/ =>
+          mfmMode = true
+          println("MFM mode on")
+        case 0b0100 /*MOTORON*/ => drive.setMotorOn(on = true)
+        case 0b1011 /*GCR MODE*/ =>
+          mfmMode = false
+          println("GCR mode on (command)")
+        case 0b1100 /*MOTOROFF*/ =>
+          if drive.isMotorOn then
+            // check mode Motor-off timer bit
+            if (swimReg(SETUP.ordinal) & SETUP_MOTORON_TIMER) != 0 then
+              motorIsTurningOff = MOTOR_OFF_1_SEC_CYCLES
+            else
+              motorIsTurningOff = 1 // 1 cycle
+            println(s"Motor is turning off: $motorIsTurningOff")
+        case 0b1110 /*EJECT*/ =>
+          ejecting = FDHD_EJECT_CYCLES
+          ejectingDriveIndex = drive.driveIndex
+        case c =>
+          println(s"Unrecognized disk command: $c")
   end sendDiskCommand
   // ===================== Cycle ==========================================
   final override def cycle(): Unit =
-    // 16mHZ clock
-    var cycle = 2
+    var cycle = swimCycles
     val drive = getSelectedDrive
-    while cycle > 0 do
+    while drive != null && cycle > 0 do
       if iwmMode then
         super.cycle()
       else
@@ -636,13 +625,34 @@ class SWIM extends IWM:
               case Reading =>
                 reading(drive,head)
               case Writing =>
-                ???
-              case WritingCRC =>
-                ???
+                writing(drive,head)
           end if
       cycle -= 1
     end while
   end cycle
+
+  private def writing(drive:MacDrive,head:Int): Unit =
+    if writeShiftRegisterBits == 0 then
+      if isFIFOEmpty then
+        writeErrorBits(ERROR_UNDERRUN)
+      else
+        val toBeWritten = fifoDequeue()
+        if mfmMode then
+          writeShiftRegister = MFM.byte2MFM(toBeWritten & 0xFF,isMark = (toBeWritten & MARK_BYTE_MASK) != 0)
+          writeShiftRegisterBits = 16
+        else
+          writeShiftRegister = toBeWritten
+          writeShiftRegisterBits = 8
+
+    val bitToWrite = if mfmMode then
+      (writeShiftRegister & 0x8000) == 0x8000
+    else
+      (writeShiftRegister & 0x80) == 0x80
+
+    writeShiftRegister <<= 1
+    drive.setBitOnHeadAndMoveAhead(head, bitToWrite)
+    writeShiftRegisterBits -= 1
+  end writing
 
   private def reading(drive:MacDrive,head:Int): Unit =
     val bit = drive.getBitOnHead(head,moveAhead = true)
@@ -653,8 +663,6 @@ class SWIM extends IWM:
 
     if mfmMode then
       // =================== MFM MODE =====================================
-      if !mfmInSync && (readShiftRegister & 0xFFFF) == MFM.I_MARK then
-        println("Index Mark!!")
       if !mfmInSync && (readShiftRegister & 0xFFFF) == MFM.MARK then
         readShiftRegister = 0
         mfmInSync = true
@@ -677,7 +685,6 @@ class SWIM extends IWM:
           if sectorByteCounter > 0 then // waiting for a sector id byte ?
             sectorByteCounter -= 1
             if sectorByteCounter == 0 then
-              println(s"SECTOR[$head] ==> $byte")
               diskListener.onSectorOnHead(drive.driveIndex,byte)
           if mfmMarkCounter == MFM.MARK_BYTE_SIZE && byte == MFM.ADDRESS_MARK_NEXT_BYTE then
             sectorByteCounter = MFM.SECTOR_BYTE_POS
@@ -685,6 +692,12 @@ class SWIM extends IWM:
       end if
     else
       // =================== GCR MODE =====================================
+      // read a bit under head and go to next one
+      val bit = drive.getBitOnHead(head,moveAhead = true)
+      readShiftRegister <<= 1
+      if bit then
+        readShiftRegister |= 1
+        
       if (readShiftRegister & 0x80) == 0x80 then
         val byte = readShiftRegister & 0xFF
         checkGCRSector(byte)

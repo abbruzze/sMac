@@ -77,11 +77,18 @@ class MacDrive(val driveIndex:Int,val clockSpeed:Int,override val doubleSide: Bo
     57, 38, 47, 17, 28, 10, 25, 21,
     37, 46,  9, 24, 45,  8,  7,  6
   )
-  private final val STEPPING_CYCLES = (clockSpeed / 1000.0 * 12).toInt // 12ms
   private var pwm_avg_sum, pwm_avg_count = 0
   private var pwm_dutycycle = 0.0f
   private var stepping = 0
   private var cycles = 0L
+
+  private var STEPPING_CYCLES: Int = 0 // to be defined inside setModel
+
+  override protected def setModel(model: MacModel): Unit =
+    super.setModel(model)
+    val ms = if macModel.ordinal < MacModel.SEFDHD.ordinal then 12 else 6 // milliseconds to wait for a step
+    STEPPING_CYCLES = (clockSpeed / 1000.0 * ms).toInt
+    log.info("Drive #%d stepping cycles: %d",driveIndex,STEPPING_CYCLES)
 
   override def ejectFloppy(): Unit =
     if floppy != null then

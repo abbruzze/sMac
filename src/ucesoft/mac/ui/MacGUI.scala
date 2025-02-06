@@ -4,7 +4,7 @@ import com.formdev.flatlaf.FlatLightLaf
 import ucesoft.mac.debugger.Debugger
 import ucesoft.mac.misc.{DNDHandler, FullScreenMode, GIFPanel, Preferences}
 import ucesoft.mac.scsi.SCSIHardDrive
-import ucesoft.mac.storage.MacDiskImage
+import ucesoft.mac.storage.{MFM, MacDiskImage}
 import ucesoft.mac.*
 
 import java.awt.event.{KeyAdapter, KeyEvent, WindowAdapter}
