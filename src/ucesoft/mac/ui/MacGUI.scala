@@ -1,11 +1,11 @@
 package ucesoft.mac.ui
 
 import com.formdev.flatlaf.FlatLightLaf
+import ucesoft.mac.*
 import ucesoft.mac.debugger.Debugger
 import ucesoft.mac.misc.{DNDHandler, FullScreenMode, GIFPanel, Preferences}
 import ucesoft.mac.scsi.SCSIHardDrive
-import ucesoft.mac.storage.{MFM, MacDiskImage}
-import ucesoft.mac.*
+import ucesoft.mac.storage.MacDiskImage
 
 import java.awt.event.{KeyAdapter, KeyEvent, WindowAdapter}
 import java.awt.{Dimension, FlowLayout, Point, Toolkit}
@@ -222,6 +222,9 @@ class MacGUI extends MessageBus.MessageListener:
     // check if a rom has been set
     if romPath == null then
       val configDialog = new JDialog(null.asInstanceOf[JFrame],"sMac's Configuration",true)
+      configDialog.addWindowListener(new java.awt.event.WindowAdapter {
+        override def windowClosing(e: java.awt.event.WindowEvent): Unit = sys.exit(0)
+      })
       val configPanel = new ConfigPanel(configured => configDialog.dispose())
       val screen = Toolkit.getDefaultToolkit.getScreenSize
       configDialog.getContentPane.add("Center",configPanel)

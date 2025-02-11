@@ -1,5 +1,10 @@
 package ucesoft.mac.storage
 
+import ucesoft.mac.storage.DiskImage.DiskEncoding
+import ucesoft.mac.storage.DiskImage.DiskEncoding.{MFM1440K, MFM720K}
+
+import java.io.FileOutputStream
+
 /**
  * @author Alessandro Abbruzzetti
  *         Created on 06/01/2025 18:47
@@ -218,28 +223,62 @@ object MFM:
 
     false
   end findDataMark
-  
-  def decodeTrack(track:Track,trackID:TrackPos,side:Int): Either[String,Array[Byte]] =
-    val sectors = Array.ofDim[Byte](18 * 512)
+
+  def writeBackToDisk(fileName:String,tracks:Array[Array[Track]],encoding: DiskEncoding): Option[String] =
+    var track = 0
+    val sides = encoding match
+      case MFM720K => 1
+      case MFM1440K => 2
+      case _ =>
+        throw new IllegalArgumentException(s"Invalid disk encoding for MFM: $encoding")
+        
+    val sectors = Array.ofDim[Array[Byte]](80 * sides)
+    var s = 0
+    while track < 80 do
+      var side = 0
+      while side < sides do
+        decodeTrack(tracks(side)(track), track, side, encoding) match
+          case Left(err) =>
+            return Some(err)
+          case Right(bytes) =>
+            sectors(s) = bytes
+        side += 1
+        s += 1
+      end while
+      track += 1
+    end while
+
+    val out = new FileOutputStream(fileName) 
+    try
+      for t <- sectors do 
+        out.write(t)
+    finally
+      out.close()
+    None
+  end writeBackToDisk
+
+  private def decodeTrack(track:Track,trackID:TrackPos,side:Int,encoding: DiskEncoding): Either[String,Array[Byte]] =
+    val totalSectors = if encoding == MFM720K then 9 else 18
+    val sectors = Array.ofDim[Byte](totalSectors * 512)
     var firstMark = true
     var sectorsFound = 0
 
     track.resetPositionTo()
     track.setMark()
 
-    while sectorsFound < 18 do
+    while sectorsFound < totalSectors do
       // find address mark
       if !findDataMark(track,ADDRESS_MARK_NEXT_BYTE,firstMark) then return Left(s"Address mark not found on track $trackID side $side")
       firstMark = false
       val tid = mfm2Byte(track.getNextByte << 8 | track.getNextByte)
       val sd = mfm2Byte(track.getNextByte << 8 | track.getNextByte)
       val sector = mfm2Byte(track.getNextByte << 8 | track.getNextByte)
-      println(s"[$sectorsFound/18]Found address mark: track $tid side $sd sector $sector")
+      //println(s"[$sectorsFound/$totalSectors]Found address mark: track $tid side $sd sector $sector")
       if tid != trackID then return Left(s"Track ID mismatch on track $trackID side $side: found $tid")
       if sd != side then return Left(s"Side mismatch on track $trackID side $side: found $sd")
-      if sector < 1 || sector > 18 then return Left(s"Invalid sector number on track $trackID side $side: $sector")
+      if sector < 1 || sector > totalSectors then return Left(s"Invalid sector number on track $trackID side $side: $sector")
       if !findDataMark(track,DATA_MARK_NEXT_BYTE,false) then return Left(s"Data mark not found on track $trackID side $side")
-      println(s"[$sectorsFound/18]Found data mark: track $tid side $sd sector $sector")
+      //println(s"[$sectorsFound/$totalSectors]Found data mark: track $tid side $sd sector $sector")
       // 512 byte of data
       val sectorOffset = (sector - 1) * 512
       for i <- 0 until 512 do

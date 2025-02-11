@@ -11,7 +11,7 @@ scalacOptions ++= Seq(
   "-deprecation"
 )
 
-javacOptions ++= Seq("--release", "22")
+javacOptions ++= Seq("--release", "17")
 
 // Generates Version.scala
 Compile / sourceGenerators += Def.task {
@@ -28,9 +28,9 @@ Compile / sourceGenerators += Def.task {
   Seq(file)
 }.taskValue
 
-libraryDependencies += "com.fifesoft" % "rsyntaxtextarea" % "3.5.3"
+libraryDependencies += "com.fifesoft" % "rsyntaxtextarea" % "3.5.4"
 libraryDependencies += "com.formdev" % "flatlaf" % "3.5.4"
-libraryDependencies += "org.yaml" % "snakeyaml" % "2.3"
+//libraryDependencies += "org.yaml" % "snakeyaml" % "2.3"
 libraryDependencies += "org.jfree" % "jfreechart" % "1.5.5"
 
 Compile / resourceDirectory := baseDirectory.value / "resources"
@@ -100,15 +100,15 @@ buildsMacDist := {
 
   // zip distribution
   val dist = baseDirectory.value / "dist"
-  val zipFile = dist / s"scalagen_${java.time.LocalDateTime.now().format(java.time.format.DateTimeFormatter.ofPattern("yyyyMMddHHmmss"))}_install.zip"
+  val zipFile = dist / s"sMac_${java.time.LocalDateTime.now().format(java.time.format.DateTimeFormatter.ofPattern("yyyyMMddHHmmss"))}_install.zip"
   val zipFileSet = walk(packDir)
   val zipFiles = zipFileSet.map { f =>
-    (f,"scalagen/" + f.toString.substring(packDir.toString.length + 1))
+    (f,"sMac/" + f.toString.substring(packDir.toString.length + 1))
   }
   IO.zip(zipFiles,zipFile,None)
   // set permissions
   val fs = java.nio.file.FileSystems.newFileSystem(zipFile.toPath)
-  val root = fs.getPath("/scalagen")
+  val root = fs.getPath("/sMac")
   val perm = java.nio.file.attribute.PosixFilePermissions.fromString("r-xr-xr-x")
   java.nio.file.Files.list(root).filter(p => p.toString.endsWith(".sh")).forEach(p => {
     java.nio.file.Files.setAttribute(p,"zip:permissions",perm)

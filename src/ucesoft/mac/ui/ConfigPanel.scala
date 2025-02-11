@@ -135,11 +135,12 @@ class ConfigPanel(action: Boolean => Unit) extends JPanel:
   private val ramPanel = new RAMPanel
   private val iconLabel = new JLabel(new ImageIcon(getClass.getResource("/resources/bigLogo.png")))
   private var canceled = false
+  private val centerPanel = new JTabbedPane()
 
   init()
 
   def getROM: ROM = rom
-  def getSCSIPaths: List[String] = scsiPaths.toList
+  def getSCSIPaths: List[String] = if centerPanel.isEnabledAt(0) then scsiPaths.toList else Nil
   def getFloppyPaths: List[String] = floppyPaths.toList
   def getRAMIndex: Int = ramIndex
   def isCanceled : Boolean = canceled
@@ -151,6 +152,12 @@ class ConfigPanel(action: Boolean => Unit) extends JPanel:
         okButton.setEnabled(true)
         iconLabel.setIcon(new ImageIcon(getClass.getResource("/resources/bigLogoReady.png")))
         ramPanel.setModel(model)
+        if model.ordinal < MacModel.PLUS.ordinal then
+          centerPanel.setEnabledAt(0,false)
+          centerPanel.setSelectedIndex(1)
+        else
+          centerPanel.setEnabledAt(0,true)
+          centerPanel.setSelectedIndex(0)
         Some(model)
       case _ =>
         val info = MacModel.values.map(m => (m.toString,m.md5)).flatMap(kv => kv._2.map(md5 => Array(kv._1.asInstanceOf[AnyRef],md5.asInstanceOf[AnyRef])))
@@ -173,7 +180,7 @@ class ConfigPanel(action: Boolean => Unit) extends JPanel:
     northPanel.add("West",iconLabel)
     northPanel.add("Center",initROMPanel())
     add("North", northPanel)
-    val centerPanel = new JTabbedPane()
+
     centerPanel.add("SCSI",initSCSIPanel())
     centerPanel.add("Floppy",initFloppyPanel())
     centerPanel.add("RAM",ramPanel)

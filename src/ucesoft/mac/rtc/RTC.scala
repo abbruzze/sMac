@@ -66,7 +66,7 @@ class RTC extends MACComponent:
           log.info("RTC PRAM loaded from %s",pramFile)
         else
           log.warning("RTC PRAM file %s not found, set default values",pramFile)
-          System.arraycopy(DEFAULT_PRAM_VALUES,0,pram,0,DEFAULT_PRAM_VALUES.length)
+          System.arraycopy(DEFAULT_PRAM_VALUES,0,pram,0,math.min(DEFAULT_PRAM_VALUES.length,pram.length))
       case _ =>
   end onMessage
 

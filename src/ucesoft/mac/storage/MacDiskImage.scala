@@ -159,8 +159,14 @@ class MacDiskImage(val fileName:String,private val emptyDisk:Boolean = false) ex
           case ImageFormat.MOOF =>
             // TODO
             Some("To be done...")
-          case _ =>
-            None
+          case f =>
+            Some(s"Format $f not supported for GCR")
       case MFM720K | MFM1440K =>
-        // TODO
-        Some("To be done...")
+        imageFormat match
+          case ImageFormat.RAW =>
+            MFM.writeBackToDisk(fileName, tracks, encoding)
+          case ImageFormat.MOOF =>
+            // TODO
+            Some("To be done...")  
+          case f =>
+            Some(s"Format $f not supported for MFM")
