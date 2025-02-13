@@ -97,20 +97,30 @@ class M68000(override val mem:Memory) extends M68KCore(mem):
         if lastInstruction == null then
           val bit15_12 = opcode >> 12
           if bit15_12 == 10 || bit15_12 == 15 then
-            throw new UnimplementedInstruction(bit15_12)
-          else throw new IllegalInstruction
+            /*
+              Unimplemented instruction has been managed here (instead as an Exception) to avoid too much Exception when
+              this kind of feature is heavy used by the OS.
+             */
+            busAccess(BusAccessMode.Idle, Size.Word, codeAccess = false, 0, 0, 4)
+            if bit15_12 == 10 then
+              raiseException(10)
+            else
+              raiseException(11)
+            fillPrefetchQueue(true)
+          else
+            throw new IllegalInstruction
+        else
+          pcReg.increment(Size.Word)
 
-        pcReg.increment(Size.Word)
+          if lastInstruction.instructionType.needsSupervisorMode && !statusReg.isSupervisorMode then
+            throw new PrivilegeViolation
 
-        if lastInstruction.instructionType.needsSupervisorMode && !statusReg.isSupervisorMode then
-          throw new PrivilegeViolation
+          val trace = statusReg.isTrace
+          lastInstruction.execute()
 
-        val trace = statusReg.isTrace
-        lastInstruction.execute()
-
-        // check Tracing
-        if trace then
-          throw new TraceException
+          // check Tracing
+          if trace then
+            throw new TraceException
       }
     catch
       case _:BUSNotAvailable =>
@@ -120,13 +130,6 @@ class M68000(override val mem:Memory) extends M68KCore(mem):
         return 1
       case _:ResetException =>
         resetCPU()
-      case ui: UnimplementedInstruction =>
-        busAccess(BusAccessMode.Idle, Size.Word, codeAccess = false, 0, 0, 4)
-        if ui.pattern == 10 then
-          raiseException(10)
-        else
-          raiseException(11)
-        fillPrefetchQueue(true)
       case _: IllegalInstruction =>
         busAccess(BusAccessMode.Idle, Size.Word, codeAccess = false, 0, 0, 4)
         raiseException(4)

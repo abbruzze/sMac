@@ -16,7 +16,6 @@ abstract class M68KCore(val mem:Memory) extends MACComponent with M6800X0:
   protected class CPUException extends Exception
   protected class AddressBusException(val address: Int, val busAccess: BusAccessMode, val instructionInProgress: Boolean, val codeAccess: Boolean) extends CPUException
   protected class IllegalInstruction extends CPUException
-  protected class UnimplementedInstruction(val pattern:Int) extends CPUException
   protected class PrivilegeViolation extends CPUException
   protected class ResetException extends CPUException
   protected class TraceException extends CPUException
