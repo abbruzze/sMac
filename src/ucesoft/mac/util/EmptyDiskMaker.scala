@@ -9,7 +9,7 @@ import java.io.IOException
 object EmptyDiskMaker:
   def main(args:Array[String]): Unit =
     if args.length < 2 then
-      println("Usage: EmptyDiskMaker <file> <size in k or m: example 720k or 1m>")
+      println("Usage: EmptyDiskMaker <file> <size in bytes or in k or m: example 819200 or 720k or 1m>")
       sys.exit(1)
     val file = args(0)
     val size = if args(1).endsWith("k") then
@@ -17,8 +17,7 @@ object EmptyDiskMaker:
     else if args(1).endsWith("m") then
       args(1).substring(0, args(1).length - 1).toInt * 1024 * 1024
     else
-      println("Invalid size format. Use k or m")
-      sys.exit(1)
+      args(1).toInt
       
     if makeDisk(file,size) then
       println(s"Empty disk $file created")

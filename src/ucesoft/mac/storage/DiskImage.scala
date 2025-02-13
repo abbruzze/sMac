@@ -45,9 +45,8 @@ trait DiskImage:
   def getHeadCount: Int
   def getTrackCount: Int
   def getTrack(head:Int,pos:TrackPos): Track
-  def eject(flush:Boolean): Unit
+  def eject(flush:Boolean,writeAsMoof:Boolean): Unit
   def isWriteProtected: Boolean
   def isModified: Boolean
-  def flushChangesOnHostDisk(): Option[String]
   def getFormat: DiskImage.ImageFormat
   def getEncoding: DiskEncoding

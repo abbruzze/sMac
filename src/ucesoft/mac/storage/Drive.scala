@@ -19,6 +19,7 @@ abstract class Drive(val doubleSide: Boolean,val present: Boolean) extends MACCo
   protected var headStepDirection : HeadStepDirection = HeadStepDirection.Up
   protected var trackNumber, steppedTrackNumber = 0
   protected var flushFloppyOnEject = true
+  protected var writeAsMoofOnEject = false
 
   override protected def reset(): Unit =
     super.reset()
@@ -33,6 +34,7 @@ abstract class Drive(val doubleSide: Boolean,val present: Boolean) extends MACCo
           floppy.getTrack(side,t).resetPositionTo()
 
   def setFlushFloppyOnEject(flush:Boolean): Unit = flushFloppyOnEject = flush
+  def setWriteAsMoofOnEject(writeMoof:Boolean): Unit = writeAsMoofOnEject = writeMoof
   def isFloppyIn: Boolean = floppy != null
   def getFloppy: Option[DiskImage] = Option(floppy)
   def getFloppySides: Int = if floppy != null then floppy.getHeadCount else 1
@@ -46,7 +48,7 @@ abstract class Drive(val doubleSide: Boolean,val present: Boolean) extends MACCo
   def ejectFloppy(): Unit =
     if floppy != null then
       log.info("Ejecting floppy: motor=%s",isMotorOn)
-      floppy.eject(flush = flushFloppyOnEject)
+      floppy.eject(flush = flushFloppyOnEject,writeAsMoof = writeAsMoofOnEject)
       floppy = null
   def isMotorOn: Boolean = motorOn
   def setMotorOn(on:Boolean): Unit = motorOn = on && present && floppy != null

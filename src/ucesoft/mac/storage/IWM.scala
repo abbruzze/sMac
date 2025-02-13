@@ -110,6 +110,10 @@ class IWM extends DiskController:
     msg match
       case MessageBus.Shutdown(_,_)=>
         drives.foreach(_.ejectFloppy())
+      case MessageBus.FlushFloppyOnEject(_,flush) =>
+        drives.foreach(_.setFlushFloppyOnEject(flush))
+      case MessageBus.WriteAsMoofFloppyOnEject(_,asMoof) =>
+        drives.foreach(_.setWriteAsMoofOnEject(asMoof))
       case _ =>
 
   override protected def reset(): Unit = 

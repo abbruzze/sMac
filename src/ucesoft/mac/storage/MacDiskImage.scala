@@ -3,6 +3,7 @@ package ucesoft.mac.storage
 import ucesoft.mac.MessageBus
 import ucesoft.mac.storage.DiskImage.DiskEncoding
 import ucesoft.mac.storage.DiskImage.DiskEncoding.*
+import ucesoft.mac.storage.DiskImage.ImageFormat.MOOF
 
 import java.io.{File, RandomAccessFile}
 /**
@@ -12,7 +13,7 @@ import java.io.{File, RandomAccessFile}
 class MacDiskImage(val fileName:String,private val emptyDisk:Boolean = false) extends DiskImage:
   import DiskImage.ImageFormat
 
-  private val WP = if emptyDisk then false else !new File(fileName).canWrite
+  private var WP = if emptyDisk then false else !new File(fileName).canWrite
   private var name : String = ""
   private var imageFormat : ImageFormat = ImageFormat.RAW
 
@@ -32,9 +33,9 @@ class MacDiskImage(val fileName:String,private val emptyDisk:Boolean = false) ex
 
   override def getTrack(head:Int,pos: TrackPos): Track = tracks(head)(pos)
   
-  override def eject(flush:Boolean): Unit =
+  override def eject(flush:Boolean,writeAsMoof:Boolean): Unit =
     if flush then
-      val error = flushChangesOnHostDisk()
+      val error = flushChangesOnHostDisk(writeAsMoof)
       MessageBus.send(MessageBus.FloppyEjected(this,name,error))
 
   override def isWriteProtected: Boolean = WP || !imageFormat.writeable // avoid to write back when format is DC42
@@ -133,40 +134,50 @@ class MacDiskImage(val fileName:String,private val emptyDisk:Boolean = false) ex
 
   private def checkMOOFFormat(file:File): Boolean =
     MOOFFormat.decodeMoofFile(file, tracks) match
-      case Some(MOOFFormat.MOOFFile(enc,dname)) =>
+      case Some(MOOFFormat.MOOFFile(enc,dname,wp)) =>
         imageFormat = ImageFormat.MOOF
         encoding = enc
         name = dname
+        if !WP then WP = wp
         true
       case None =>
         false
   end checkMOOFFormat
 
-  override def flushChangesOnHostDisk(): Option[String] =
-    if !isModified || isWriteProtected then return None
+  private def flushChangesOnHostDisk(writeAsMoof:Boolean): Option[String] =
+    if isWriteProtected then return None
+    if !isModified && !(writeAsMoof && imageFormat != MOOF) then return None
 
-    println(s"Flushing $name ...")
+    println(s"Flushing $name ... ${if writeAsMoof && imageFormat != MOOF then " converting to MOOF" else ""}")
 
     encoding match
       case GCR400K | GCR800K =>
-        imageFormat match
-          case ImageFormat.RAW =>
-            GCREncoder.writeBackToDisk(fileName, tracks, encoding) match
-              case Left(err) => Some(err)
-              case Right(newEncoding) =>
-                encoding = newEncoding
-                None
-          case ImageFormat.MOOF =>
-            // TODO
-            Some("To be done...")
-          case f =>
-            Some(s"Format $f not supported for GCR")
+        if writeAsMoof && imageFormat != MOOF then
+          MOOFFormat.encodeMoofFile(s"$fileName.moof",tracks,encoding,diskName)
+          None
+        else
+          imageFormat match
+            case ImageFormat.RAW =>
+              GCREncoder.writeBackToDisk(fileName, tracks, encoding) match
+                case Left(err) => Some(err)
+                case Right(newEncoding) =>
+                  encoding = newEncoding
+                  None
+            case ImageFormat.MOOF =>
+              MOOFFormat.encodeMoofFile(fileName,tracks,encoding,diskName)
+              None
+            case f =>
+              Some(s"Format $f not supported for GCR")
       case MFM720K | MFM1440K =>
-        imageFormat match
-          case ImageFormat.RAW =>
-            MFM.writeBackToDisk(fileName, tracks, encoding)
-          case ImageFormat.MOOF =>
-            // TODO
-            Some("To be done...")  
-          case f =>
-            Some(s"Format $f not supported for MFM")
+        if writeAsMoof && imageFormat != MOOF then
+          MOOFFormat.encodeMoofFile(s"$fileName.moof",tracks,encoding,diskName)
+          None
+        else
+          imageFormat match
+            case ImageFormat.RAW =>
+              MFM.writeBackToDisk(fileName, tracks, encoding)
+            case ImageFormat.MOOF =>
+              MOOFFormat.encodeMoofFile(fileName,tracks,encoding,diskName)
+              None
+            case f =>
+              Some(s"Format $f not supported for MFM")

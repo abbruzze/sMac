@@ -225,6 +225,7 @@ class MacGUI extends MessageBus.MessageListener:
       configDialog.addWindowListener(new java.awt.event.WindowAdapter {
         override def windowClosing(e: java.awt.event.WindowEvent): Unit = sys.exit(0)
       })
+      configDialog.setIconImage(new ImageIcon(this.getClass.getResource("/resources/logo.gif")).getImage)
       val configPanel = new ConfigPanel(configured => configDialog.dispose())
       val screen = Toolkit.getDefaultToolkit.getScreenSize
       configDialog.getContentPane.add("Center",configPanel)
@@ -444,6 +445,19 @@ class MacGUI extends MessageBus.MessageListener:
       pause(on = pauseItem.isSelected)
       if pauseItem.isSelected then
         display.setPaused()
+    })
+    
+    val flushFloppyItem = new JCheckBoxMenuItem("Write floppies on eject")
+    flushFloppyItem.setSelected(true)
+    fileMenu.add(flushFloppyItem)
+    flushFloppyItem.addActionListener(_ => {
+      MessageBus.send(MessageBus.FlushFloppyOnEject(this,flushFloppyItem.isSelected))
+    })
+
+    val writeAsMoofFloppyItem = new JCheckBoxMenuItem("Write floppies as MOOF")
+    fileMenu.add(writeAsMoofFloppyItem)
+    writeAsMoofFloppyItem.addActionListener(_ => {
+      MessageBus.send(MessageBus.WriteAsMoofFloppyOnEject(this, writeAsMoofFloppyItem.isSelected))
     })
 
     val exitItem = new JMenuItem("Exit")

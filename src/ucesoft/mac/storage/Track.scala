@@ -1,19 +1,7 @@
 package ucesoft.mac.storage
 
+import scala.collection.mutable.ListBuffer
 import scala.util.Random
-
-object Track:
-  def main(args:Array[String]): Unit =
-    val track = new Track()
-    track.setInt(0b1111111100,10)
-    track.finish()
-    //track.setAndMoveOn()
-    track.resetPositionTo()
-    track.clearAndMoveOn()
-    track.clearAndMoveOn()
-
-    println(track.getBitSize)
-    track.dump()
 
 /**
  * @author Alessandro Abbruzzetti
@@ -25,6 +13,27 @@ class Track(private var bitLength:Int = Int.MaxValue):
   private var modified = false
   private var mark = -1
   private var markReached = false
+
+  def asArrayOfByte: Array[Byte] =
+    var pos = 0
+    var sh = 0
+    var bit = 0
+    val buffer = new ListBuffer[Byte]
+    while pos < bitLength do
+      sh <<= 1
+      sh |= (if bitset(pos) then 1 else 0)
+      pos += 1
+      bit += 1
+      if bit == 8 then
+        buffer += sh.toByte
+        sh = 0
+        bit = 0
+    if bit > 0 then
+      while bit < 8 do
+        sh <<= 1
+        bit += 1
+      buffer += sh.toByte
+    buffer.toArray
   
   def setMark(mark:Int = -1): Unit = 
     if mark == -1 then this.mark = currentPos else this.mark = mark

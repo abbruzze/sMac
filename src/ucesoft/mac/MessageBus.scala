@@ -18,6 +18,8 @@ object MessageBus:
   case class WarpMode(override val source:AnyRef,enabled:Boolean) extends Message
   case class ZoomFactorChanged(override val source:AnyRef,zoomFactorX:Int,zoomFactoryY:Int) extends Message
   case class FloppyMotorOn(override val source:AnyRef,id:Int,isOn:Boolean) extends Message
+  case class FlushFloppyOnEject(override val source:AnyRef,flush:Boolean) extends Message
+  case class WriteAsMoofFloppyOnEject(override val source:AnyRef,asMoof:Boolean) extends Message
   // ============================================
   trait MessageListener:
     def onMessage(msg:Message): Unit

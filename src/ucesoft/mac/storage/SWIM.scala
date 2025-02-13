@@ -186,7 +186,7 @@ class SWIM extends IWM:
       case 3 =>
         if ismIwmSelect == 1 then
           log.info("SWIM: ISM mode set")
-          println("ISM mode set")
+          //println("ISM mode set")
           swimReg(MODE.ordinal) |= MODE_ISM_IWM_SELECT
           saveDriveRegisterSelection()
 
@@ -211,7 +211,7 @@ class SWIM extends IWM:
     mfmBitLengthCycles = macModel.clockRateMhz / 500_000 // 500 Kbit/s => 16 cycles per bit
     mfmBitCycles = 0
     diskListener.onFloppyModeChanged(getSelectedDrive.driveIndex,writing = !isReadMode)
-    println(s"ACTION!: $mfmBitLengthCycles")
+    //println(s"ACTION!: $mfmBitLengthCycles")
   end initAction
 
   /**
@@ -279,7 +279,7 @@ class SWIM extends IWM:
 
   private def writeIWMConfRegister(value:Int): Unit =
     swimReg(IWM_CONF.ordinal) = value
-    println(s"IWM configuration register = $value")
+    //println(s"IWM configuration register = $value")
   private def readPRAM(): Int =
     //println(s"Reading pram [$pramAddress] = ${pram(pramAddress)}")
     val value = pram(pramAddress)
@@ -378,7 +378,7 @@ class SWIM extends IWM:
     if (oldMode & MODE_ACTION) == 0 && (swimReg(MODE.ordinal) & MODE_ACTION) != 0 then
       state = if isReadMode then Reading else Writing
       initAction()
-      println(s"ACTION set. State = $state")
+      //println(s"ACTION set. State = $state")
     else if (oldMode & MODE_ACTION) != 0 && (swimReg(MODE.ordinal) & MODE_ACTION) == 0 then
       state = Idle
       //println("ACTION cleared. State = Idle")
@@ -388,7 +388,7 @@ class SWIM extends IWM:
     // 6 Clearing this bit switches to the IWM register set As long as this bit remains a "1" the ISM register set will stay selected.
     if (swimReg(MODE.ordinal) & MODE_ISM_IWM_SELECT) == 0 then
       log.info("SWIM: IWM mode set")
-      println("IWM mode set")
+      //println("IWM mode set")
       saveDriveRegisterSelection()
     // 7 Enables/disables the /ENBLl and /ENBL2 drive enables (assuming bit 1 or 2 is set).
     //   This bit must be set prior to setting ACTION and must not be cleared until after ACTION is cleared.
@@ -426,7 +426,6 @@ class SWIM extends IWM:
     //   be read from the FIFO.
     if crc != 0 then hs |= HANDSHAKE_CRC_ERROR
     // 2 This bit returns the current state of the RDDATA input from the drive.
-    // TODO ?
     val drive = getSelectedDrive
     if drive != null then
       if drive.getBitOnHead(getHead, moveAhead = false) then hs |= HANDSHAKE_RDDATA
@@ -485,7 +484,7 @@ class SWIM extends IWM:
         case 0b111 => // read HANDSHAKE
           readHandshake
         case r =>
-          println(s"Reading unknown register: $r")
+          log.warning("Reading unknown register: %d",r)
           0
     else
       a3a2a1a0 & 0b0111 match
@@ -507,7 +506,7 @@ class SWIM extends IWM:
         case addr@(0b110 | 0b111) => // write MODE
             writeMode(value, (addr & 1) == 0)
         case r =>
-          println(s"Writing unknown register: $r")
+          log.warning("Reading unknown register: %d",r)
       0
     end if
   end rwRegister
@@ -553,14 +552,14 @@ class SWIM extends IWM:
         false
       case 0b1110 /*/INSTALLED*/ => //TODO Drive installed: 0 = installed, 1 = not installed
         !drive.present
-      case 0b1111 /*/PRESENT*/ => //TODO PRESENT/HD
+      case 0b1111 /*/PRESENT*/ => // PRESENT/HD
         if macModel.ordinal >= MacModel.SEFDHD.ordinal then
           !(drive.isFloppyIn && drive.getFloppy.get.getEncoding.hd)
         else
           !drive.present
       case _ =>
         log.warning("Reading unknown SWIM sense bit: %2X", driveRegisterSelection)
-        println(s"Reading unknown SWIM sense bit: ${driveRegisterSelection & 15}")
+        //println(s"Reading unknown SWIM sense bit: ${driveRegisterSelection & 15}")
         true
   end readDiskSense
   // ===================== Drive command ==================================
@@ -574,11 +573,11 @@ class SWIM extends IWM:
         case 0b0010 /*TRACKSTEP*/ => drive.stepHead()
         case 0b0011 /*MFM MODE*/ =>
           mfmMode = true
-          println("MFM mode on")
+          //println("MFM mode on")
         case 0b0100 /*MOTORON*/ => drive.setMotorOn(on = true)
         case 0b1011 /*GCR MODE*/ =>
           mfmMode = false
-          println("GCR mode on (command)")
+          //println("GCR mode on (command)")
         case 0b1100 /*MOTOROFF*/ =>
           if drive.isMotorOn then
             // check mode Motor-off timer bit
@@ -586,12 +585,12 @@ class SWIM extends IWM:
               motorIsTurningOff = MOTOR_OFF_1_SEC_CYCLES
             else
               motorIsTurningOff = 1 // 1 cycle
-            println(s"Motor is turning off: $motorIsTurningOff")
+            //println(s"Motor is turning off: $motorIsTurningOff")
         case 0b1110 /*EJECT*/ =>
           ejecting = FDHD_EJECT_CYCLES
           ejectingDriveIndex = drive.driveIndex
         case c =>
-          println(s"Unrecognized disk command: $c")
+          log.warning("Unrecognized disk command: %d",c)
   end sendDiskCommand
   // ===================== Cycle ==========================================
   final override def cycle(): Unit =
