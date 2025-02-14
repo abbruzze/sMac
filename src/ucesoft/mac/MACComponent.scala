@@ -47,7 +47,7 @@ trait MACComponent extends MessageBus.MessageListener:
     macModel = model
   
   final def setComponentModel(model:MacModel): Unit =
-    log.info("Setting model %s", model.toString)
+    log.info("[%s]Setting model %s",componentName, model.toString)
     setModel(model)
     components.foreach(_.setModel(model))
   

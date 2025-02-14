@@ -51,6 +51,7 @@ buildsMacDist := {
   val packDir = classDir.getParentFile / "pack"
   IO.delete(packDir)
   IO.createDirectory(packDir)
+  val packConfig = packDir / "config"
   val packLib = packDir / "lib"
   IO.createDirectories(Seq(packLib))
 
@@ -71,7 +72,11 @@ buildsMacDist := {
     val name = f.getName.toUpperCase
     name.endsWith(".SH") || name.endsWith(".BAT")
   }
-
+  val configs = (baseDirectory.value / "config").listFiles
+  // copy config
+  for (config <- configs) {
+    IO.copyFile(config,packConfig / config.getName)
+  }
   // copy libraries
   for (lib <- libraries) {
     IO.copyFile(lib,packLib / lib.getName)

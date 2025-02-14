@@ -11,6 +11,7 @@ object Preferences {
   final val MEMORY = "memory"
   final val AUTO_WARP = "auto-warp"
   final val SKIP_MEM_TEST = "skip-mem-test"
+  final val KEYB_CONFIG = "keyboard-config-file"
   // ==============================================================
   
   class PreferenceIllegalArgumentException(msg:String) extends Exception(msg)

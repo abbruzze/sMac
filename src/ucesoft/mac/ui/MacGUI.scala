@@ -26,9 +26,9 @@ object MacGUI:
     val preBuildLogs = new ListBuffer[String]
     Logger.setLogger(msg => preBuildLogs += msg)
     val mac = new MacGUI
-    preBuildLogs.toList.foreach(Logger.getLogger.addLog)
     try
       mac.configure(args)
+      preBuildLogs.toList.foreach(Logger.getLogger.addLog)
       mac.boot()
       mac.run()
     catch
@@ -189,6 +189,12 @@ class MacGUI extends MessageBus.MessageListener:
     }
     pref.add(SKIP_MEM_TEST, "skip initial memory test", false) { skip => }
 
+    pref.add(KEYB_CONFIG,"keyboard configuration file","") { file =>
+      if file.nonEmpty then
+        val keybFile = new File(new File(conf.homeDir,"config"),file)
+        mac.keyboard.onMessage(MessageBus.KeyboardConfigFile(this,keybFile.toString))
+    }
+
     if pref.checkForHelp(args) then
       println(s"sMac emulator ver. ${Version.VERSION} (${Version.BUILD_DATE})")
       pref.printUsage("config file")
@@ -327,9 +333,9 @@ class MacGUI extends MessageBus.MessageListener:
         }
     })
 
-    log.setLevel(java.util.logging.Level.SEVERE)
-
     MessageBus.send(MessageBus.Configuration(this,conf))
+
+    log.setLevel(java.util.logging.Level.SEVERE)
 
     SwingUtilities.invokeLater(() => {
       frame.pack()

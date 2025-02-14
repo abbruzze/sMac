@@ -1,6 +1,5 @@
 package ucesoft.mac.storage
 
-import ucesoft.mac.storage.DiskImage.DiskEncoding.MFM720K
 import ucesoft.mac.{MACComponent, MacModel, MessageBus}
 
 import scala.compiletime.uninitialized
@@ -18,8 +17,8 @@ abstract class Drive(val doubleSide: Boolean,val present: Boolean) extends MACCo
   protected var motorOn = false
   protected var headStepDirection : HeadStepDirection = HeadStepDirection.Up
   protected var trackNumber, steppedTrackNumber = 0
-  protected var flushFloppyOnEject = true
-  protected var writeAsMoofOnEject = false
+  private var flushFloppyOnEject = true
+  private var writeAsMoofOnEject = false
 
   override protected def reset(): Unit =
     super.reset()
@@ -90,7 +89,7 @@ class MacDrive(val driveIndex:Int,val clockSpeed:Int,override val doubleSide: Bo
     super.setModel(model)
     val ms = if macModel.ordinal < MacModel.SEFDHD.ordinal then 12 else 6 // milliseconds to wait for a step
     STEPPING_CYCLES = (clockSpeed / 1000.0 * ms).toInt
-    log.info("Drive #%d stepping cycles: %d",driveIndex,STEPPING_CYCLES)
+    //log.info("Drive #%d stepping cycles: %d",driveIndex,STEPPING_CYCLES)
 
   override def ejectFloppy(): Unit =
     if floppy != null then

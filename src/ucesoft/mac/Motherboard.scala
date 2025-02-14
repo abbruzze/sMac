@@ -20,6 +20,7 @@ import ucesoft.mac.video.MacVideo.VideoSignalListener
  *         Created on 06/01/2025 15:48  
  */
 class Motherboard extends MACComponent with Clockable with VideoSignalListener with M6800X0.BusAccessListener:
+  override protected val componentName: String = "Motherboard"
   private inline val SYSTEM_CLOCK_FREQ = 7_833_600
   private inline val VIA_CLOCK_DIVIDER = 10
   private var VIA_CLOCK_FREQ = SYSTEM_CLOCK_FREQ / VIA_CLOCK_DIVIDER

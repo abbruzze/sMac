@@ -8,6 +8,7 @@ import javax.imageio.ImageIO
 import javax.swing.*
 
 class Display(width: Int, height: Int, title: String, frame: JFrame, clk:Clock) extends JComponent with MouseMotionListener with MouseListener with MACComponent {
+  override protected val componentName: String = "Display"
   private val dimension = new Dimension(0, 0)
   private var dashIndex = 0
   private val mouseZoomStartPoint,mouseZoomEndPoint = new Point

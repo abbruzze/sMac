@@ -1,11 +1,12 @@
 package ucesoft.mac.keyboard
 
-import ucesoft.mac.{MACComponent, MacModel}
+import ucesoft.mac.{ConfigContext, MACComponent, MacModel, MessageBus}
 import ucesoft.mac.adb.ADBKeyboard
 
 import java.awt.event.{KeyEvent, KeyListener}
 import scala.collection.mutable
 import java.awt.event.KeyEvent.*
+import java.io.{File, FileInputStream}
 import java.util.concurrent.locks.ReentrantLock
 import javax.swing.ImageIcon
 
@@ -137,18 +138,17 @@ object MacKeyboard:
   private inline val CMD_MOD        = 0x8000
 
   // ======================= M0110 =====================================================================================
-
   private final val M0110Table: KeyboardCodeTable = List(
     // |  `|  1|  2|  3|  4|  5|  6|  7|  8|  9|  0|  -|  =|Backs|
-    List(0x10000f2/*ò*/,VK_1,VK_2,VK_3,VK_4,VK_5,VK_6,VK_7,VK_8,VK_9,VK_0,0x10000ec/*ì*/,0x10000f9/*ù*/,VK_BACK_SPACE),
+    List(0x65, 0x25, 0x27, 0x29, 0x2B, 0x2F, 0x2D, 0x35, 0x39, 0x33, 0x3B, 0x37, 0x31, 0x67),
     // |Tab  |  Q|  W|  E|  R|  T|  Y|  U|  I|  O|  P|  [|  ]|  \|
-    List(VK_TAB,VK_Q,VK_W,VK_E,VK_R,VK_T,VK_Y,VK_U,VK_I,VK_O,VK_P,0x10000e8/*è*/,VK_PLUS,VK_BACK_SLASH),
+    List(0x61, 0x19, 0x1B, 0x1D, 0x1F, 0x23, 0x21, 0x41, 0x45, 0x3F, 0x47, 0x43, 0x3D, 0x55),
     // |CapsLo|  A|  S|  D|  F|  G|  H|  J|  K|  L|  ;|  '|Return|
-    List(VK_CAPS_LOCK,VK_A,VK_S,VK_D,VK_F,VK_G,VK_H,VK_J,VK_K,VK_L,0x10000e0/*à*/,VK_QUOTE,VK_ENTER),
+    List(0x73, 0x01, 0x03, 0x05, 0x07, 0x0B, 0x09, 0x4D, 0x51, 0x4B, 0x53, 0x4F, 0x49),
     // |Shift   |  Z|  X|  C|  V|  B|  N|  M|  ,|  .|  /|        |
-    List(VK_SHIFT,VK_Z,VK_X,VK_C,VK_V,VK_B,VK_N,VK_M,VK_COMMA,VK_PERIOD,VK_MINUS),
+    List(0x71, 0x0D, 0x0F, 0x11, 0x13, 0x17, 0x5B, 0x5D, 0x57, 0x5F, 0x59),
     // |Opt|Mac |         Space               |Enter|Opt|
-    List(VK_LESS,VK_CONTROL,VK_SPACE,VK_INSERT,VK_LESS)
+    List(0x75, 0x6F, 0x63, 0x69, 0x75)
   )
   private final val M0110_ITALIAN_KEY_CODES: KeyboardCodeTable = List(
     // |  `|  1|  2|  3|  4|  5|  6|  7|  8|  9|  0|  -|  =|Backs|
@@ -201,7 +201,7 @@ object MacKeyboard:
     // |CapsLo|  A|  S|  D|  F|  G|  H|  J|  K|  L|  ;|  "|Return  |               |  4|  5|  6|  +|
     List(CAPS_LOCK_MOD | 0x39,0x0,0x1,0x2,0x3,0x5,0x4,0x26,0x28,0x25,0x29,0x27,0x24,0x56,0x57,0x58,0x45),
     // |Shift   |  Z|  X|  C|  V|  B|  N|  M|  ,|  .|  /|     Shift|     |Up |     |  1|  2|  3|Ent|
-    List(SHIFT_MOD | 0x38,0x6,0x7,0x8,0x9,0xB,0x2D,0x2E,0x2B,0x2F,0x2C,/*No right shift*/0x3E,0x53,0x54,0x55,0x4C),
+    List(SHIFT_MOD | 0x38,0x6,0x7,0x8,0x9,0xB,0x2D,0x2E,0x2B,0x2F,0x2C,/*No right shift*/0x3E,0x53,0x54,0x55/*No Ent 0x4C*/),
     // |Ctrl |Opt |Gui  |        Space            |Gui  |Opt |Ctrl | |Lef|Rig|Dow| |   0   |  .|   |
     List(CONTROL_MOD | 0x36,OPTION_MOD | 0x3A,CMD_MOD | 0x37,0x31,0x3B,0x3C,0x3D,0x52,0x41)
   )
@@ -217,10 +217,10 @@ object MacKeyboard:
     // |Shift   |  Z|  X|  C|  V|  B|  N|  M|  ,|  .|  /|     Shift|     |Up |     |  1|  2|  3|Ent|
     List(VK_SHIFT, VK_Z, VK_X, VK_C, VK_V, VK_B, VK_N, VK_M, VK_COMMA, VK_PERIOD, VK_MINUS,VK_UP,VK_NUMPAD1,VK_NUMPAD2,VK_NUMPAD3/*no Ent*/),
     // |Ctrl |Opt |Gui  |        Space            |Gui  |Opt |Ctrl | |Lef|Rig|Dow| |   0   |  .|   |
-    List(VK_CONTROL,VK_LESS,VK_ALT_GRAPH, VK_SPACE,VK_LEFT,VK_RIGHT,VK_DOWN,VK_NUMPAD0,VK_DECIMAL)
+    List(VK_ALT_GRAPH,VK_LESS,VK_CONTROL, VK_SPACE,VK_LEFT,VK_RIGHT,VK_DOWN,VK_NUMPAD0,VK_DECIMAL)
   )
 
-  enum KeyboardModel(val code:Int, val codeTable:KeyboardCodeTable,val keyCodeTable:KeyboardCodeTable):
+  enum KeyboardModel(val code:Int, val codeTable:KeyboardCodeTable,var keyCodeTable:KeyboardCodeTable):
     case M0110 extends KeyboardModel(code = 0x09, codeTable = M0110Table, keyCodeTable = M0110_ITALIAN_KEY_CODES)
     case M0110A extends KeyboardModel(code = 0x0B, codeTable = M0110ATable, keyCodeTable = M0110A_ITALIAN_KEY_CODES)
     case M0115 extends KeyboardModel(code = 0x0B, codeTable = M0115Table, keyCodeTable = M0115_ITALIAN_KEY_CODES)
@@ -241,6 +241,8 @@ class MacKeyboard extends MACComponent with KeyListener:
   import MacKeyboard.*
   override protected val componentName = "Keyboard"
   override protected val icon = new ImageIcon(getClass.getResource("/resources/trace/keyboard.png"))
+
+  private inline val DEFAULT_KEYB_CONFIG_FILE = "keyboard.conf"
   
   private val eventQueue = new mutable.Queue[Int]
   private val queueLock = new ReentrantLock()
@@ -248,6 +250,64 @@ class MacKeyboard extends MACComponent with KeyListener:
   private var keyMap : Map[Int,Int] = buildMap()
   private var capsLockOn = false
   private val adbKeyboard = new ADBKeyboard
+  private var configFileLoaded = false
+
+  override def onMessage(msg: MessageBus.Message): Unit =
+    msg match
+      case MessageBus.KeyboardConfigFile(_,configFile) =>
+        loadKeybConfig(configFile)
+      case MessageBus.Configuration(_,config) =>
+        if !configFileLoaded then
+          val defConfigFile = new File(new File(config.homeDir,"config"),DEFAULT_KEYB_CONFIG_FILE)
+          if defConfigFile.exists() then
+            log.info("Loading default keyboard configuration file %s ...",defConfigFile)
+            loadKeybConfig(defConfigFile.toString)
+      case _ =>
+  end onMessage
+
+  private def loadKeybConfig(configFile:String): Unit =
+    log.info("Reading keyboard configuration file %s ...",configFile)
+    if !new File(configFile).exists() then
+      log.warning("Keyboard configuration file %s not found",configFile)
+      return
+    val in = new FileInputStream(configFile)
+    try
+      KeyboardConfig.readConfig(in) match
+        case Right(value) =>
+          configFileLoaded = true
+          for k <- value do
+            log.info("Checking keyboard configuration for %s",k.name)
+            k.name match
+              case "M0110" =>
+                if checkKeybConfig(k.name,KeyboardModel.M0110.codeTable,k.codes) then
+                  KeyboardModel.M0110.keyCodeTable = k.codes
+              case "M0110A" =>
+                if checkKeybConfig(k.name,KeyboardModel.M0110A.codeTable,k.codes) then
+                  KeyboardModel.M0110A.keyCodeTable = k.codes
+              case "M0115" =>
+                if checkKeybConfig(k.name,KeyboardModel.M0115.codeTable,k.codes) then
+                  KeyboardModel.M0115.keyCodeTable = k.codes
+              case kb =>
+                log.error(s"Bad keyboard model %s. Valid keyboard models are: ${KeyboardModel.values.mkString(",")}",kb)
+        case Left(err) =>
+          log.error("Error reading keyboard configuration file %s: %s",configFile,err)
+    finally
+      in.close()
+  end loadKeybConfig
+
+  private def checkKeybConfig(name:String,codes:KeyboardCodeTable,keys:KeyboardCodeTable): Boolean =
+    if codes.length != keys.length then
+      log.error("Keyboard configuration error: codes and keys have different length")
+      return false
+    var i = 0
+    while i < codes.length do
+      if codes(i).length != keys(i).length then
+        log.error("Keyboard %s configuration error: codes and keys have different length on row %d, %d != %d",name,i,codes(i).length,keys(i).length)
+        return false
+      i += 1
+
+    true
+  end checkKeybConfig
 
   def getADBKeyboard: ADBKeyboard = adbKeyboard
 
