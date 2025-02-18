@@ -1,3 +1,8 @@
+![workflow status](https://github.com/abbruzze/sMac/actions/workflows/scala.yml/badge.svg)
+[![Release](https://img.shields.io/github/v/release/abbruzze/sMac)](https://github.com/abbruzze/sMac/releases)
+[![Language](https://img.shields.io/github/languages/top/abbruzze/sMac)]()
+[![Downloads](https://img.shields.io/github/downloads/abbruzze/sMac/total)](https://github.com/abbruzze/sMac/releases/latest)
+
 <p align="center">
   <img src="images/verybigLogo.png" alt="sMac logo">
 </p>
