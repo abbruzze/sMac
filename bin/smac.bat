@@ -4,7 +4,7 @@ set HOME=%HOME_PATH:~0,-1%
 set LIB="%HOME%\lib"
 set CP=
 set CLASS=ucesoft.mac.ui.MacGUI
-set OPT=-server -Xms128M -Xmx128M --add-opens java.desktop/com.sun.media.sound=ALL-UNNAMED
+set OPT=-server -Xms64M -Xmx64M --add-opens java.desktop/com.sun.media.sound=ALL-UNNAMED
 
 if defined JAVA_HOME goto :setJavaHome
 set JAVAW=javaw
