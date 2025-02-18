@@ -638,9 +638,6 @@ class Debugger(m68k:M68000,
     commentedROMButton.setToolTipText("Enable/disable commented rom")
     commentedROMButton.addActionListener(_ => if enableCommentedROMPanel(commentedROMButton.isSelected) then commentedROMButton.setSelected(false))
 
-    val jumpButton = new JButton("Jump")
-    jumpButton.addActionListener(_ => jumpToAddress())
-
     toolBar.add(onOffButton)
     toolBar.add(stepInButton)
     toolBar.add(stepOverButton)
@@ -652,7 +649,6 @@ class Debugger(m68k:M68000,
     toolBar.add(breakPoint)
     toolBar.add(saveTrace)
     toolBar.add(commentedROMButton)
-    toolBar.add(jumpButton)
 
     // log panel
     logPanel.setEditable(false)
@@ -856,15 +852,3 @@ class Debugger(m68k:M68000,
 
   def setROM(rom:Array[Byte]): Unit =
     romDialog = new MemoryDumper(rom,0,"ROM",frame,() => romDumpItem.setSelected(false),canUpdate = false,setPreferredScrollableViewportSize = false, showASCII = true).dialog
-
-  private def jumpToAddress(): Unit =
-    JOptionPane.showInputDialog(frame,"Insert hex address to jump to","") match
-      case null =>
-      case s =>
-        try
-          val address = Integer.parseInt(s,16)
-          m68k.getRegister(RegisterType.PC).set(address,Size.Long)
-          m68k.clearPrefetchQueue()
-        catch
-          case _:NumberFormatException =>
-            JOptionPane.showMessageDialog(frame,"Invalid address","Error",JOptionPane.ERROR_MESSAGE)

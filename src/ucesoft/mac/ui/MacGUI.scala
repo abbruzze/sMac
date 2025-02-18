@@ -407,13 +407,13 @@ class MacGUI extends MessageBus.MessageListener:
     frame.setJMenuBar(menubar)
 
     val fileMenu = new JMenu("File")
-    val stateMenu = new JMenu("State")
+    //val stateMenu = new JMenu("State")
     val debugMenu = new JMenu("Debug")
     val toolsMenu = new JMenu("Tools")
     val helpMenu = new JMenu("Help")
 
     menubar.add(fileMenu)
-    menubar.add(stateMenu)
+    //menubar.add(stateMenu)
     menubar.add(debugMenu)
     menubar.add(toolsMenu)
     menubar.add(helpMenu)
@@ -506,13 +506,33 @@ class MacGUI extends MessageBus.MessageListener:
 
     toolsMenu.add(perfMonitorItem)
     perfMonitorItem.addActionListener(_ => showPerformanceMonitor(perfMonitorItem.isSelected))
+
+    val snapshotItem = new JMenuItem("Take a picture...")
+    snapshotItem.setAccelerator(KeyStroke.getKeyStroke(java.awt.event.KeyEvent.VK_I,java.awt.event.InputEvent.ALT_DOWN_MASK))
+    snapshotItem.addActionListener(_ => takeSnapshot() )
+    toolsMenu.add(snapshotItem)
   end buildToolsMenu
 
   private def buildHelpMenu(helpMenu:JMenu): Unit =
     val aboutItem = new JMenuItem("About")
     helpMenu.add(aboutItem)
     aboutItem.addActionListener(_ => AboutPanel.showAboutDialog(frame))
+
+    val prefItem = new JMenuItem("Command options")
+    helpMenu.add(prefItem)
+    prefItem.addActionListener(_ => {
+      val settingsPanel = new SettingsPanel(pref)
+      JOptionPane.showMessageDialog(frame, settingsPanel, "Command options", JOptionPane.INFORMATION_MESSAGE, new ImageIcon(getClass.getResource("/resources/bigLogo.png")))
+    })
   // ==========================================
+  private def takeSnapshot(): Unit =
+    val fc = new JFileChooser("Choose where to save the snapshot")
+    fc.showSaveDialog(frame) match
+      case JFileChooser.APPROVE_OPTION =>
+        val file = if (fc.getSelectedFile.getName.toUpperCase.endsWith(".PNG")) fc.getSelectedFile else new File(fc.getSelectedFile.toString + ".png")
+        display.saveSnapshot(file)
+      case _ =>
+
   private def showPerformanceMonitor(show:Boolean): Unit =
     if show then
       performanceMonitor = new PerformanceMonitor(frame,mac.m68k,mac.masterClock,Array(mac.iwm,mac.scsi),() => perfMonitorItem.setSelected(false))
