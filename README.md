@@ -80,6 +80,7 @@ The emulator can be launched in two ways:
 
 2) double click on the .bat/.sh icon or run the script without parameters:
 ![](images/configurationDialog.png "Configuration dialog")
+
 here you can drag & drop the rom file, the HD SCSI images, the floppy images and configure ram size.
 
 ## Supported ROMS
@@ -99,7 +100,7 @@ By default, the emulator loads the keyboard configuration file config/keyboard.c
 It can be used another configuration file using --keyboard-config-file <file> where file is located under config.
 The default bindings is for Italian keyboard.
 Follows the keyboard.conf default configuration file:
-```yaml
+```text
 # sMac keyboards definition file: Italian binding
 # 
 # Each keyboard must be defined with 
@@ -170,6 +171,7 @@ Take on me: Flim with music
 ![](images/takeonme.gif "Flim/take on me")
 
 Performance monitor
+
 ![](images/performance.png "performance")
 |                                                |                             |                                           |
 |------------------------------------------------|-----------------------------|-------------------------------------------|
