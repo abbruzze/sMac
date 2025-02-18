@@ -89,7 +89,10 @@ The emulator can be launched in two ways:
 here you can drag & drop the rom file, the HD SCSI images, the floppy images and configure ram size.
 
 If you need to create empty disks you can use the command `makedisk.bat` or `makedisk.sh`:
-`makedisk.sh test.dsk 10m` will create an empty HD 10M file that could be used as a SCSI hard disk (attach it to the emulator and then initialize it with Apple HD SC Setup) 
+`makedisk.sh test.dsk 10m` will create an empty HD 10M file that could be used as a SCSI hard disk (attach it to the emulator and then initialize it with Apple HD SC Setup)
+
+SCSI disks cannot be attached after the emulator launch.
+Floppies, instead, can be attached using File menù or using drag & drop: with d&d a disk can be attached to floppy#1 using the CTRL key.
 
 ## Supported ROMS
  | ROM type      |MD5|
